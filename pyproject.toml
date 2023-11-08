@@ -1,0 +1,128 @@
+[build-system]
+requires = ["hatchling >= 1.13.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fastapi-proxy"
+# the lowest required python version should be added to `.pre-commit-pyrightconfig.json`
+requires-python = ">=3.8"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Sean Wang" }] # email = "..."
+description = '...'
+keywords = ["fastapi", "proxy"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+
+dependencies = [
+    "fastapi",
+    "httpx",
+    "httpx-ws",
+    "starlette",
+    "websockets",
+    "typing_extensions>=4.5.0",
+]
+
+[project.urls]
+# Documentation = "..."
+# "Source code" = "..."
+
+[project.optional-dependencies]
+cli = ["uvicorn[standard]"]
+dev = [
+    "fastapi-proxy[cli]",
+    "black == 23.10.0",
+    "pyright == 1.1.332",
+    "ruff == 0.1.1",
+    "pytest == 7.4.2",
+    "mkdocs-material == 9.4.6",
+    "mkdocstrings[python] == 0.23.0",
+    "pre-commit == 3.5.0",
+    # "hatch == 1.7.0",
+]
+
+[tool.hatch.version]
+path = "fastapi_proxy/__init__.py"
+
+[tool.hatch.build]
+include = ["/fastapi_proxy"]
+
+[tool.ruff]
+# Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
+# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
+# McCabe complexity (`C901`) by default.
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "C4",     # flake8-comprehensions
+    "B",      # flake8-bugbear
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "D",      # pydocstyle
+    "SIM",    # flake8-simplify
+    "RUF",    # unused-noqa
+    "Q",      # flake8-quotes
+    "C90",    # McCabe complexity
+    "ANN001", # missing-type-function-argument
+    "ANN201", # missing-return-type-undocumented-public-function
+    "ASYNC",  # flake8-async
+    "A",      # flake8-builtins
+    "COM",    # flake8-commas
+    "ISC",    # flake8-implicit-str-concat
+    "ICN001", # unconventional-import-alias
+    "PIE",    # flake8-pie
+    "PT",     # flake8-pytest-style
+    "INT",    # flake8-gettext
+    "ARG",    # flake8-unused-arguments
+    "PGH004", # blanket-noqa
+    "TRY201", # Use raise without specifying exception name
+    "NPY",    # NumPy-specific rules 
+    "PD",     # pandas-vet
+    "PERF",   # Perflint
+    "PL",     # Pylint
+]
+ignore = [
+    "E501",    # line too long, handled by black
+    "COM812",  # missing-trailing-comma
+    "PERF203", # try-except within a loop incurs performance overhead
+    "PLR2004", # magic-value-comparison
+    "PLR5501", # collapsible-else-if
+    "PLW0120", # useless-else-on-loop
+    "PLR0911", # too-many-return-statements
+    "PLR0913", # too-many-arguments
+    "PLC0205", # single-string-slots 
+    "PLW0603", # global-statement
+    "PLC1901", # compare-to-empty-string
+    "PLR0904", # too-many-public-methods
+    "RUF002",  # ambiguous-unicode-character-docstring
+    "RUF003",  # ambiguous-unicode-character-comment
+    "SIM105",  # suppressible-exception # slower
+    # "SIM108",  # if-else-block-instead-of-if-exp 
+]
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.pyright]
+# https://microsoft.github.io/pyright/#/configuration
+
+# all options here must be added to `.pre-commit-pyrightconfig.json`
+# except for `reportMissingImports`, which is only used when pre-commit
+typeCheckingMode = "strict"
+pythonVersion = "3.8"
+reportUnusedImport = "warning"
+reportUnusedFunction = "warning"
+reportUnusedExpression = "warning"
+reportUnusedVariable = "warning"
+reportUnnecessaryTypeIgnoreComment = true
+reportPrivateUsage = "warning"
+reportUnnecessaryIsInstance = "warning"
+reportIncompatibleMethodOverride = "warning"
+reportMissingTypeArgument = true
+reportMissingParameterType = true

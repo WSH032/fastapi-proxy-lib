@@ -1,0 +1,14 @@
+{
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.8",
+  "reportUnusedImport": "warning",
+  "reportUnusedFunction": "warning",
+  "reportUnusedExpression": "warning",
+  "reportUnusedVariable": "warning",
+  "reportUnnecessaryTypeIgnoreComment": true,
+  "reportPrivateUsage": "warning",
+  "reportUnnecessaryIsInstance": "warning",
+  "reportIncompatibleMethodOverride": "warning",
+  "reportMissingTypeArgument": true,
+  "reportMissingParameterType": true
+}
