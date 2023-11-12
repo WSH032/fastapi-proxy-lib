@@ -476,7 +476,7 @@ class BaseWebSocketProxy(BaseProxyModel):
         *,
         websocket: starlette_ws.WebSocket,
         target_url: httpx.URL,
-    ) -> Union[JSONResponse, Literal[True]]:
+    ) -> Union[JSONResponse, Literal[False]]:
         """Establish websocket connection with client and target_url, then pass messages between them.
 
         - The http version of request must be in `{SUPPORTED_HTTP_VERSIONS}`.
@@ -487,7 +487,7 @@ class BaseWebSocketProxy(BaseProxyModel):
 
         Returns:
             If the establish websocket connection failed, return a JSONResponse.
-            If the establish websocket connection success, will run forever until the connection is closed. Then return True.
+            If the establish websocket connection success, will run forever until the connection is closed. Then return False.
         """
         client = self.client
         follow_redirects = self.follow_redirects
@@ -623,7 +623,7 @@ class BaseWebSocketProxy(BaseProxyModel):
                 client_ws=websocket,
                 server_ws=proxy_ws,
             )
-        return True
+        return False
 
     @override
     async def proxy(*_: Any, **__: Any) -> NoReturn:
@@ -732,7 +732,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
     @override
     async def proxy(  # pyright: ignore [reportIncompatibleMethodOverride]
         self, *, websocket: starlette_ws.WebSocket, path: Optional[str] = None
-    ) -> Union[JSONResponse, Literal[True]]:
+    ) -> Union[JSONResponse, Literal[False]]:
         """Establish websocket connection with client and target_url, then pass messages between them.
 
         Args:
@@ -743,7 +743,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
 
         Returns:
             If the establish websocket connection failed, return a JSONResponse.
-            If the establish websocket connection success, will run forever until the connection is closed. Then return True.
+            If the establish websocket connection success, will run forever until the connection is closed. Then return False.
         """
         base_url = self.base_url
 

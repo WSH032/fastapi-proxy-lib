@@ -104,6 +104,7 @@ ignore = [
     "RUF002",  # ambiguous-unicode-character-docstring
     "RUF003",  # ambiguous-unicode-character-comment
     "SIM105",  # suppressible-exception # slower
+    "D418",    # Function decorated with `@overload` shouldn't contain a docstring
     # "SIM108",  # if-else-block-instead-of-if-exp
 ]
 

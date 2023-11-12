@@ -1,4 +1,7 @@
-"""User-oriented helper functions."""
+"""User-oriented helper functions.
+
+Note: All user-oriented non-private functions (including local functions) must have documentation.
+"""
 
 import asyncio
 import warnings
@@ -23,7 +26,7 @@ from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.websockets import WebSocket
-from typing_extensions import overload
+from typing_extensions import deprecated, overload
 
 from fastapi_proxy.core.http import ForwardHttpProxy, ReverseHttpProxy
 from fastapi_proxy.core.websocket import ReverseWebSocketProxy
@@ -61,6 +64,9 @@ HTTP_METHODS: _HttpMethodTypes = (
 
 
 # https://fastapi.tiangolo.com/zh/advanced/events/
+@deprecated(
+    "May or may not be removed in the future.", category=PendingDeprecationWarning
+)
 def lifespan_event_factory(
     *,
     startup_events: Optional[Iterable[_LifeEventTypes[_T]]] = None,
@@ -75,9 +81,9 @@ def lifespan_event_factory(
 
     Args:
         startup_events:
-            An iterative container,
+            An iterable container,
             where each element is an asynchronous function
-            that needs to accept first positional parameter for `app`.
+            which needs to accept first positional parameter for `app`.
         shutdown_events:
             The same as `startup_events`.
 
@@ -101,6 +107,16 @@ def _http_register_router(
     router: APIRouter,
     **kwargs: Any,
 ) -> None:
+    """Bind http proxy to router.
+
+    Args:
+        proxy: http proxy to bind.
+        router: fastapi router to bind.
+        **kwargs: The kwargs to pass to router endpoint(e.g `router.get()`).
+
+    Returns:
+        None. Just do binding proxy to router.
+    """
     kwargs.pop("path", None)
 
     @router.get("/{path:path}", **kwargs)
@@ -114,7 +130,15 @@ def _http_register_router(
     async def http_proxy(  # pyright: ignore[reportUnusedFunction]
         request: Request, path: str = ""
     ) -> Response:
-        """HTTP proxy endpoint."""
+        """HTTP proxy endpoint.
+
+        Args:
+            request: The original request from client.
+            path: The path parameters of request.
+
+        Returns:
+            The response from target server.
+        """
         return await proxy.proxy(request=request, path=path)
 
 
@@ -123,20 +147,39 @@ def _ws_register_router(
     router: APIRouter,
     **kwargs: Any,
 ) -> None:
+    """Bind websocket proxy to router.
+
+    Args:
+        proxy: websocket proxy to bind.
+        router: fastapi router to bind.
+        **kwargs: The kwargs to pass to router endpoint(e.g `router.websocket()`).
+
+    Returns:
+        None. Just do binding proxy to router.
+    """
     kwargs.pop("path", None)
 
     @router.websocket("/{path:path}", **kwargs)
     async def ws_proxy(  # pyright: ignore[reportUnusedFunction]
         websocket: WebSocket, path: str = ""
-    ) -> Union[Response, Literal[True]]:
-        """WebSocket proxy endpoint."""
+    ) -> Union[Response, Literal[False]]:
+        """WebSocket proxy endpoint.
+
+        Args:
+            websocket: The original websocket request from client.
+            path: The path parameters of request.
+
+        Returns:
+            If the establish websocket connection failed, return a JSONResponse.
+            If the establish websocket connection success, will run forever until the connection is closed. Then return False.
+        """
         return await proxy.proxy(websocket=websocket, path=path)
 
 
 class RouterHelper:
     """Helper class to register proxy to fastapi router."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize RouterHelper."""
         self._registered_clients: Set[httpx.AsyncClient] = set()
         self._registered_router_id: Set[int] = set()
@@ -153,7 +196,7 @@ class RouterHelper:
         router: Optional[None] = None,
         **endpoint_kwargs: Any,
     ) -> APIRouter:
-        ...
+        """If router is None, will create a new router."""
 
     @overload
     def register_router(
@@ -162,7 +205,7 @@ class RouterHelper:
         router: _APIRouterTypes,
         **endpoint_kwargs: Any,
     ) -> _APIRouterTypes:
-        ...
+        """If router is not None, will use the given router."""
 
     def register_router(
         self,
@@ -178,13 +221,13 @@ class RouterHelper:
                 If None, will create a new router.
                 Usually, you don't need to set the argument, unless you want set some arguments to router.
                 Note: the same router can only be registered once.
-            endpoint_kwargs: The kwargs to pass to router endpoint(e.g `router.get()`).
+            **endpoint_kwargs: The kwargs to pass to router endpoint(e.g `router.get()`).
 
         Raises:
             TypeError: If pass a unknown proxy type.
 
         Returns:
-            A fastapi router.
+            A fastapi router, which proxy endpoint has been registered on root route: '/'.
         """
         router = APIRouter() if router is None else router
 
@@ -215,12 +258,27 @@ class RouterHelper:
         self._registered_clients.add(proxy.client)
         return router
 
-    def get_lifespan(self) -> Callable[[Any], AsyncContextManager[None]]:
-        """The lifespan event for close registered clients."""
+    def get_lifespan(self) -> Callable[..., AsyncContextManager[None]]:
+        """The lifespan event for closing registered clients.
 
-        async def shutdown_clients(_: Any):
+        Returns:
+            asynccontextmanager for closing registered clients.
+        """
+
+        @asynccontextmanager
+        async def shutdown_clients(*_: Any, **__: Any) -> AsyncIterator[None]:
+            """Asynccontextmanager for closing registered clients.
+
+            Args:
+                *_: Whatever.
+                **__: Whatever.
+
+            Returns:
+                When __aexit__ is called, will close all registered clients.
+            """
+            yield
             await asyncio.gather(
                 *[client.aclose() for client in self.registered_clients]
             )
 
-        return lifespan_event_factory(shutdown_events=[shutdown_clients])
+        return shutdown_clients
