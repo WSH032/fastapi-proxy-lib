@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 # https://hatch.pypa.io/latest/config/metadata/
 [project]
-name = "fastapi-proxy"
+name = "fastapi-proxy-lib"
 # the lowest required python version should be added to `.pre-commit-pyrightconfig.json`
 requires-python = ">=3.8"
 readme = "README.md"
@@ -44,15 +44,15 @@ dependencies = ["httpx", "httpx-ws", "starlette", "typing_extensions>=4.5.0"]
 
 [project.urls]
 # Documentation = "..."
-"Source code" = "https://github.com/WSH032/fastapi-proxy"
+"Source code" = "https://github.com/WSH032/fastapi-proxy-lib"
 
 [project.optional-dependencies]
 standard = ["fastapi"]
-all = ["fastapi-proxy[standard]"]
+all = ["fastapi-proxy-lib[standard]"]
 
 
 [tool.hatch.version]
-path = "src/fastapi_proxy/__init__.py"
+path = "src/fastapi_proxy_lib/__init__.py"
 
 [tool.hatch.envs.default]
 path = ".venv" # for vscode auto selecting python interpreter

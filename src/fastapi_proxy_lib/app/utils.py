@@ -28,8 +28,8 @@ from starlette.responses import Response
 from starlette.websockets import WebSocket
 from typing_extensions import deprecated, overload
 
-from fastapi_proxy.core.http import ForwardHttpProxy, ReverseHttpProxy
-from fastapi_proxy.core.websocket import ReverseWebSocketProxy
+from fastapi_proxy_lib.core.http import ForwardHttpProxy, ReverseHttpProxy
+from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
 
 _HttpProxyTypes = Union[ForwardHttpProxy, ReverseHttpProxy]
 _WebSocketProxyTypes = ReverseWebSocketProxy
