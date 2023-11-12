@@ -39,7 +39,7 @@ class BaseProxyModel(abc.ABC):
     async def aclose(self) -> None:
         """Close AsyncClient.
 
-        Equeal to:
+        Equal to:
             await self.client.aclose()
         """
         await self.client.aclose()
@@ -49,7 +49,7 @@ class BaseProxyModel(abc.ABC):
         """Abstract method to send request to target server.
 
         Subclass must implement this method.
-            - Should acept orinal request from client, such as starlette.requests.Request | starlette.websockets.WebSocket .
+            - Should accept orinal request from client, such as starlette.requests.Request | starlette.websockets.WebSocket .
             - Then adjust the request, e.g change the host of request to target proxy server.
             - Then sent the request to target proxy server.
             - Response:

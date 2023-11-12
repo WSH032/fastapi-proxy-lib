@@ -32,4 +32,10 @@ repos:
     rev: v1.1.332
     hooks:
       - id: pyright
-        args: [-p, ".pre-commit-pyrightconfig.json"]  # ignore `reportMissingImports`
+        args: [-p, ".pre-commit-pyrightconfig.json"] # ignore `reportMissingImports`
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.6
+    hooks:
+      - id: codespell
+        additional_dependencies:
+          - tomli

@@ -42,6 +42,7 @@ dev = [
     "mkdocs-material == 9.4.6",
     "mkdocstrings[python] == 0.23.0",
     "pre-commit == 3.5.0",
+    "codespell == 2.2.6",
     # "hatch == 1.7.0",
 ]
 
@@ -82,7 +83,7 @@ select = [
     "ARG",    # flake8-unused-arguments
     "PGH004", # blanket-noqa
     "TRY201", # Use raise without specifying exception name
-    "NPY",    # NumPy-specific rules 
+    "NPY",    # NumPy-specific rules
     "PD",     # pandas-vet
     "PERF",   # Perflint
     "PL",     # Pylint
@@ -96,14 +97,14 @@ ignore = [
     "PLW0120", # useless-else-on-loop
     "PLR0911", # too-many-return-statements
     "PLR0913", # too-many-arguments
-    "PLC0205", # single-string-slots 
+    "PLC0205", # single-string-slots
     "PLW0603", # global-statement
     "PLC1901", # compare-to-empty-string
     "PLR0904", # too-many-public-methods
     "RUF002",  # ambiguous-unicode-character-docstring
     "RUF003",  # ambiguous-unicode-character-comment
     "SIM105",  # suppressible-exception # slower
-    # "SIM108",  # if-else-block-instead-of-if-exp 
+    # "SIM108",  # if-else-block-instead-of-if-exp
 ]
 
 [tool.ruff.pydocstyle]

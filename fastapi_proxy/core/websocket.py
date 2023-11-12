@@ -134,7 +134,7 @@ async def _starlette_ws_receive_bytes_or_str(
     """Receive bytes or str from starlette WebSocket.
 
     - There is already a queue inside to store the received data
-    - Even if Exception is raised, the {WebSocket} would **not** be closed automaticly, you should close it manually
+    - Even if Exception is raised, the {WebSocket} would **not** be closed automatically, you should close it manually
 
     Args:
         websocket: The starlette WebSocket that has been connected.
@@ -184,8 +184,8 @@ async def _httpx_ws_receive_bytes_or_str(
     """Receive bytes or str from httpx_ws AsyncWebSocketSession .
 
     - There is already a queue inside to store the received data
-    - Even if Exception is raised, the {WebSocket} would **not** be closed automaticly, you should close it manually
-        - except for httpx_ws.WebSocketNetworkError, which will call 'close' automaticly
+    - Even if Exception is raised, the {WebSocket} would **not** be closed automatically, you should close it manually
+        - except for httpx_ws.WebSocketNetworkError, which will call 'close' automatically
 
     Args:
         websocket: The httpx_ws AsyncWebSocketSession that has been connected.
@@ -195,7 +195,7 @@ async def _httpx_ws_receive_bytes_or_str(
             WebSocketDisconnect.code is the close code.
             WebSocketDisconnect.reason is the close reason.
             - **This is normal behavior that you should catch**
-        httpx_ws.WebSocketNetworkError: A network error occured.
+        httpx_ws.WebSocketNetworkError: A network error occurred.
 
         httpx_ws.WebSocketInvalidTypeReceived: If receive a invalid message type which is neither bytes nor str.
             Usually it will never be raised, just for assert
@@ -237,7 +237,7 @@ async def _httpx_ws_send_bytes_or_str(
         data: The data to send.
 
     Raises:
-        httpx_ws.WebSocketNetworkError: A network error occured.
+        httpx_ws.WebSocketNetworkError: A network error occurred.
         wsproto.utilities.LocalProtocolError:
             This is raised when the connection is asked to do something
             that is either incompatible with the state or the websocket standard.
@@ -259,7 +259,7 @@ async def _starlette_ws_send_bytes_or_str(
 ) -> None:
     """Send bytes or str to WebSocket.
 
-    - Even if Exception is raised, the {WebSocket} would **not** be closed automaticly, you should close it manually
+    - Even if Exception is raised, the {WebSocket} would **not** be closed automatically, you should close it manually
 
     Args:
         websocket: The starlette_ws.WebSocket that has been connected.

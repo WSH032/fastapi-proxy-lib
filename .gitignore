@@ -152,4 +152,4 @@ cython_debug/
 #.idea/
 
 /.vscode/*
-!.vscode/extensions.json
+!/.vscode/extensions.json

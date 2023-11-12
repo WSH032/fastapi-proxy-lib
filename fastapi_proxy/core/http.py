@@ -65,6 +65,7 @@ class _ConnectionHeaderParseResult(NamedTuple):
 
 # TODO: 将这些错误移动到 _tool.py 中
 
+
 class _BadTargetUrlError(ValueError):
     """Bad target url of forward http proxy."""
 
@@ -90,7 +91,7 @@ _400_ERROR_NEED_TO_BE_CATCHED_IN_FORWARD_PROXY = (
     httpx.ProtocolError,  # 请求或者相应的格式错误，比如缺少host，或者响应头不符合规范
     # ValueError,  # 近乎万能的错误，可能会掩盖不是网络问题的错误
 )
-"""These errors need to be catched.
+"""These errors need to be caught.
 When:
 - client.build_request
 - client.send
@@ -98,7 +99,7 @@ When:
 _500_ERROR_NEED_TO_BE_CATCHED_IN_FORWARD_PROXY = (
     httpx.ConnectError,  # 我们无法分辨是服务器网络错误导致无法连接，还是客户端输入的了错误且无法连接的url导致了这个错误
 )
-"""These errors need to be catched and return 5xx status_code.
+"""These errors need to be caught and return 5xx status_code.
 When:
 - client.build_request
 - client.send

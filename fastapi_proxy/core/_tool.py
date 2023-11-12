@@ -79,8 +79,8 @@ class ErrMsg(TypedDict):
     """A error message of response.
 
     Attributes:
-        err_type: equel to {type(error).__name__}.
-        msg: equel to {str(error)}.
+        err_type: equal to {type(error).__name__}.
+        msg: equal to {str(error)}.
     """
 
     err_type: str
@@ -155,7 +155,7 @@ def check_base_url(base_url: Union[httpx.URL, str], /) -> httpx.URL:
     - Time consumption: 56.2 µs ± 682 ns.
 
     Args:
-        base_url: url that need to be checked and formated.
+        base_url: url that need to be checked and formatted.
             - If base_url is a str, it will be converted to httpx.URL.
 
     Raises:
