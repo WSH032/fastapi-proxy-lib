@@ -2,15 +2,13 @@
 
 cd "$(dirname ${0})/.."
 
-# Install dependencies
-pip install -e .[dev]
+pipx install pre-commit
+pipx install hatch
 
 # Init pre-commit
+# https://pre-commit.com/#3-install-the-git-hook-scripts
 pre-commit install
 pre-commit run --all-files
 
-# # Init hatch
-# hatch build
-
-# # Init build docs
-# mkdocs build
+# https://hatch.pypa.io/latest/environment/
+hatch shell
