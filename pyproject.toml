@@ -2,60 +2,92 @@
 requires = ["hatchling >= 1.13.0"]
 build-backend = "hatchling.build"
 
+# https://hatch.pypa.io/latest/config/metadata/
 [project]
 name = "fastapi-proxy"
 # the lowest required python version should be added to `.pre-commit-pyrightconfig.json`
 requires-python = ">=3.8"
 readme = "README.md"
 license = { file = "LICENSE" }
-authors = [{ name = "Sean Wang" }] # email = "..."
-description = '...'
-keywords = ["fastapi", "proxy"]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+authors = [
+    { name = "Sean Wang", email = "126865849+WSH032@users.noreply.github.com" },
 ]
-dynamic = ["version"]
-
-dependencies = [
+description = "HTTP/WebSocket asgi proxy."
+keywords = [
+    "proxy",
+    "http",
+    "websocket",
+    "asgi",
+    "starlette",
     "fastapi",
     "httpx",
     "httpx-ws",
-    "starlette",
-    "websockets",
-    "typing_extensions>=4.5.0",
 ]
+# https://pypi.org/classifiers/
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Internet :: WWW/HTTP :: Session",
+    "Framework :: AsyncIO",
+]
+
+dynamic = ["version"]
+
+dependencies = ["httpx", "httpx-ws", "starlette", "typing_extensions>=4.5.0"]
 
 [project.urls]
 # Documentation = "..."
-# "Source code" = "..."
+"Source code" = "https://github.com/WSH032/fastapi-proxy"
 
 [project.optional-dependencies]
-cli = ["uvicorn[standard]"]
-dev = [
-    "fastapi-proxy[cli]",
-    "black == 23.10.0",
-    "pyright == 1.1.332",
-    "ruff == 0.1.1",
-    "pytest == 7.4.2",
-    "mkdocs-material == 9.4.6",
-    "mkdocstrings[python] == 0.23.0",
-    "pre-commit == 3.5.0",
-    "codespell == 2.2.6",
-    # "hatch == 1.7.0",
-]
+standard = ["fastapi"]
+all = ["fastapi-proxy[standard]"]
+
 
 [tool.hatch.version]
-path = "fastapi_proxy/__init__.py"
+path = "src/fastapi_proxy/__init__.py"
 
-[tool.hatch.build]
-include = ["/fastapi_proxy"]
+[tool.hatch.envs.default]
+path = ".venv" # for vscode auto selecting python interpreter
+features = ["all"]
+dependencies = [
+    # lint
+    # The dependencies version must be consistent with the `.pre-commit-config.yaml`.
+    # # "pre-commit == 3.5.0",
+    "black == 23.10.0",
+    "pyright == 1.1.332", # pyright must be installed in the runtime environment
+    "ruff == 0.1.1",
+    "codespell == 2.2.6",
+    # test
+    "pytest == 7.4.2",
+    "pytest-cov ==  4.1.0",
+    "uvicorn[standard] == 0.23.2",
+]
 
+[tool.hatch.envs.default.scripts]
+test = "pytest --cov-report=html"
+# ruff must before black
+lint = ["ruff --fix .", "black .", "pyright .", "codespell ."]
+
+# https://hatch.pypa.io/latest/config/environment/overview/#detached-environments
+[tool.hatch.envs.docs]
+detached = true
+dependencies = ["mkdocs-material == 9.4.6", "mkdocstrings[python] == 0.23.0"]
+
+[tool.hatch.envs.docs.scripts]
+docs-serve = "mkdocs serve"
+docs-build = "mkdocs build"
+
+
+# https://docs.astral.sh/ruff/rules/
 [tool.ruff]
-# Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
-# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
-# McCabe complexity (`C901`) by default.
 select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
@@ -87,6 +119,7 @@ select = [
     "PD",     # pandas-vet
     "PERF",   # Perflint
     "PL",     # Pylint
+    "TID252", # Relative imports from parent modules are banned
 ]
 ignore = [
     "E501",    # line too long, handled by black
@@ -108,14 +141,13 @@ ignore = [
     # "SIM108",  # if-else-block-instead-of-if-exp
 ]
 
+# https://docs.astral.sh/ruff/settings/#pydocstyle
 [tool.ruff.pydocstyle]
 convention = "google"
 
-[tool.pyright]
-# https://microsoft.github.io/pyright/#/configuration
 
-# all options here must be added to `.pre-commit-pyrightconfig.json`
-# except for `reportMissingImports`, which is only used when pre-commit
+# https://microsoft.github.io/pyright/#/configuration
+[tool.pyright]
 typeCheckingMode = "strict"
 pythonVersion = "3.8"
 reportUnusedImport = "warning"
