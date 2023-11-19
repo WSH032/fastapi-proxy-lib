@@ -66,15 +66,22 @@ dependencies = [
     "ruff == 0.1.1",
     "codespell == 2.2.6",
     # test
-    "pytest == 7.4.2",
-    "pytest-cov ==  4.1.0",
+    "pytest == 7.*",
+    "pytest-cov ==  4.*",
     "uvicorn[standard] == 0.23.2",
+    "httpx[http2]",
+    "anyio",                       # for pytest async test, we don't set version here, because fastapi has a dependency on it
+    "asgi-lifespan==2.*",
+    "pytest-timeout==2.*",
 ]
 
 [tool.hatch.envs.default.scripts]
-test = "pytest --cov-report=html"
+# https://pytest-cov.readthedocs.io/en/latest/config.html
+test = "pytest tests/ --cov-report=html --cov"
 # ruff must before black
-lint = ["ruff --fix .", "black .", "pyright .", "codespell ."]
+lint = ["- ruff --fix .", "- black .", "- pyright .", "- codespell . -i 3 -w"]
+lint-check = ["ruff .", "black --check .", "pyright .", "codespell ."]
+all = ["lint-check", "test"]
 
 # https://hatch.pypa.io/latest/config/environment/overview/#detached-environments
 [tool.hatch.envs.docs]
@@ -137,13 +144,16 @@ ignore = [
     "RUF002",  # ambiguous-unicode-character-docstring
     "RUF003",  # ambiguous-unicode-character-comment
     "SIM105",  # suppressible-exception # slower
-    "D418",    # Function decorated with `@overload` shouldn't contain a docstring
+    # "D418",    # Function decorated with `@overload` shouldn't contain a docstring
     # "SIM108",  # if-else-block-instead-of-if-exp
 ]
 
 # https://docs.astral.sh/ruff/settings/#pydocstyle
 [tool.ruff.pydocstyle]
 convention = "google"
+
+# [tool.ruff.flake8-tidy-imports]
+# ban-relative-imports = "all"
 
 
 # https://microsoft.github.io/pyright/#/configuration
@@ -160,3 +170,33 @@ reportUnnecessaryIsInstance = "warning"
 reportIncompatibleMethodOverride = "warning"
 reportMissingTypeArgument = true
 reportMissingParameterType = true
+
+
+# https://coverage.readthedocs.io/en/7.3.2/config.html#run
+[tool.coverage.run]
+branch = true
+source = ['fastapi_proxy_lib']
+
+# https://coverage.readthedocs.io/en/7.3.2/config.html#report
+[tool.coverage.report]
+exclude_also = [
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+    "@(typing_extensions\\.)?deprecated", # deprecated code will not be tested
+    # `overload` just for type hint, will not be tested
+    "@(typing_extensions\\.)?overload",
+    "@(typing\\.)?overload",
+    "raise AssertionError",
+]
+
+
+[tool.codespell]
+# https://github.com/codespell-project/codespell/issues/1887
+skip = "./htmlcov" # pytest-cov report files
+
+
+[tool.pytest.ini_options]
+timeout = 15

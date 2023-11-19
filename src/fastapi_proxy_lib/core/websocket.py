@@ -17,7 +17,6 @@ from typing import (
 import httpx
 import httpx_ws
 import starlette.websockets as starlette_ws
-from httpx import AsyncClient
 from httpx_ws._api import (  # HACK: 注意，这个是私有模块
     DEFAULT_KEEPALIVE_PING_INTERVAL_SECONDS,
     DEFAULT_KEEPALIVE_PING_TIMEOUT_SECONDS,
@@ -32,7 +31,8 @@ from starlette.datastructures import (
     MutableHeaders as StarletteMutableHeaders,
 )
 from starlette.exceptions import WebSocketException as StarletteWebSocketException
-from starlette.responses import JSONResponse
+from starlette.responses import Response as StarletteResponse
+from starlette.responses import StreamingResponse
 from starlette.types import Scope
 from typing_extensions import TypeAlias, override
 from wsproto.events import BytesMessage as WsprotoBytesMessage
@@ -42,7 +42,6 @@ from ._model import BaseProxyModel
 from ._tool import (
     check_base_url,
     check_http_version,
-    return_err_msg_response,
 )
 
 __all__ = (
@@ -157,8 +156,9 @@ async def _starlette_ws_receive_bytes_or_str(
     """
     # 实现参考:
     # https://github.com/encode/starlette/blob/657e7e7b728e13dc66cc3f77dffd00a42545e171/starlette/websockets.py#L107C1-L115C1
-    if websocket.application_state != starlette_ws.WebSocketState.CONNECTED:
-        raise RuntimeError('WebSocket is not connected. Need to call "accept" first.')
+    assert (
+        websocket.application_state == starlette_ws.WebSocketState.CONNECTED
+    ), """WebSocket is not connected. Need to call "accept" first."""
 
     message = await websocket.receive()
     # maybe raise WebSocketDisconnect
@@ -170,6 +170,8 @@ async def _starlette_ws_receive_bytes_or_str(
     elif message.get("text") is not None:
         return message["text"]
     else:
+        # 这种情况应该不会发生，因为这是ASGI标准
+        raise AssertionError("message should have 'bytes' or 'text' key")
         raise StarletteWebSocketException(
             code=starlette_status.WS_1008_POLICY_VIOLATION,
             reason="Invalid message type received (neither bytes nor text).",
@@ -220,7 +222,9 @@ async def _httpx_ws_receive_bytes_or_str(
             # 强制保证是bytes
             # FIXME, HACK, XXX: 注意，这是有性能损耗的，调查bytearray是否可以直接用
             return bytes(event.data)
-    else:
+    else:  # pragma: no cover # 无法测试这个分支，因为无法发送这种消息，正常来说也不会被执行，所以我们这里记录critical
+        msg = f"Invalid message type received: {type(event)}"
+        logging.critical(msg)
         raise httpx_ws.WebSocketInvalidTypeReceived(event)
 
 
@@ -376,6 +380,7 @@ async def _close_ws(
             return
         else:
             # 如果上述情况都没有发生，意味着至少其中一个任务发生了异常，导致了另一个任务被取消
+            # NOTE: 我们不在这个分支调用 `ws.close`，而是留到最后的 finally 来关闭
             client_info = client_ws.client
             client_host, client_port = (
                 (client_info.host, client_info.port)
@@ -390,11 +395,11 @@ server_error: {server_error}\
 """
             logging.warning(msg)
 
-    except Exception as e:
-        logging.exception(
-            f"Error when close ws connection. client: {client_to_server_task}, server:{server_to_client_task}",
-            exc_info=e,
+    except Exception as e:  # pragma: no cover # 这个分支是一个保险分支，通常无法执行，所以只进行记录
+        logging.error(
+            f"{e} when close ws connection. client: {client_to_server_task}, server:{server_to_client_task}"
         )
+        raise
 
     finally:
         # 无论如何，确保关闭两个websocket
@@ -403,11 +408,14 @@ server_error: {server_error}\
         try:
             await client_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
         except Exception:
+            # 这个分支通常会被触发，因为uvicorn服务器在重复调用close时会引发异常
             pass
         try:
             await server_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
-        except Exception:
-            pass
+        except Exception as e:  # pragma: no cover
+            # 这个分支是一个保险分支，通常无法执行，所以只进行记录
+            # 不会触发的原因是，负责服务端 ws 连接的 httpx_ws 支持重复调用close而不引发错误
+            logging.debug("Unexpected error for debug", exc_info=e)
 
 
 #################### # ####################
@@ -427,7 +435,7 @@ class BaseWebSocketProxy(BaseProxyModel):
     [1]: https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws
     """
 
-    client: AsyncClient
+    client: httpx.AsyncClient
     follow_redirects: bool
     max_message_size_bytes: int
     queue_size: int
@@ -437,7 +445,7 @@ class BaseWebSocketProxy(BaseProxyModel):
     @override
     def __init__(
         self,
-        client: Optional[AsyncClient] = None,
+        client: Optional[httpx.AsyncClient] = None,
         *,
         follow_redirects: bool = False,
         max_message_size_bytes: int = DEFAULT_MAX_MESSAGE_SIZE_BYTES,
@@ -476,7 +484,7 @@ class BaseWebSocketProxy(BaseProxyModel):
         *,
         websocket: starlette_ws.WebSocket,
         target_url: httpx.URL,
-    ) -> Union[JSONResponse, Literal[False]]:
+    ) -> Union[Literal[False], StarletteResponse]:
         """Establish websocket connection with client and target_url, then pass messages between them.
 
         - The http version of request must be in `{SUPPORTED_HTTP_VERSIONS}`.
@@ -486,8 +494,11 @@ class BaseWebSocketProxy(BaseProxyModel):
             target_url: The url of target websocket server.
 
         Returns:
-            If the establish websocket connection failed, return a JSONResponse.
-            If the establish websocket connection success, will run forever until the connection is closed. Then return False.
+            If the establish websocket connection failed:
+                - Will call `websocket.close()`
+                - Then return a StarletteResponse from target server
+            If the establish websocket connection success:
+                - Will run forever until the connection is closed. Then return False.
         """
         client = self.client
         follow_redirects = self.follow_redirects
@@ -510,6 +521,8 @@ class BaseWebSocketProxy(BaseProxyModel):
         # TODO: 是否可以不检查http版本?
         check_result = check_http_version(websocket.scope, SUPPORTED_WS_HTTP_VERSIONS)
         if check_result is not None:
+            # NOTE: return 之前最好关闭websocket
+            await websocket.close()
             return check_result
 
         # DEBUG: 用于调试的记录
@@ -545,16 +558,22 @@ class BaseWebSocketProxy(BaseProxyModel):
         except httpx_ws.WebSocketUpgradeError as e:
             # 这个错误是在 httpx.stream 获取到响应后才返回的, 也就是说至少本服务器的网络应该是正常的
             # 且对于反向ws代理来说，本服务器管理者有义务保证与目标服务器的连接是正常的
-            # 所以这里既有可能是客户端的错误，也有可能是本服务器的未知错误
-            # 所以在这里我们使用logging.warning()来记录这个错误
+            # 所以这里既有可能是客户端的错误，或者是目标服务器拒绝了连接
+            # TODO: 也有可能是本服务器的未知错误
             proxy_res = e.response
-            return return_err_msg_response(
-                e,
+
+            # NOTE: return 之前最好关闭websocket
+            # 不调用websocket.accept就发送关闭请求，uvicorn会自动发送403错误
+            await websocket.close()
+            # TODO: 连接失败的时候httpx_ws会自己关闭连接，但或许这里显式关闭会更好
+
+            # HACK: 这里的返回的响应其实uvicorn不会处理
+            return StreamingResponse(
+                content=proxy_res.aiter_raw(),
                 status_code=proxy_res.status_code,
                 headers=proxy_res.headers,
-                logger=logging.warning,
-                _exc_info=e,
             )
+
         # NOTE: 对于反向代理服务器，我们不返回 "任何" "具体的内部" 错误信息给客户端，因为这可能涉及到服务器内部的信息泄露
 
         # NOTE: 请使用 with 语句来 "保证关闭" AsyncWebSocketSession
@@ -591,38 +610,52 @@ class BaseWebSocketProxy(BaseProxyModel):
                 server_to_client_task=server_to_client_task,
             )
 
-            done, pending = await asyncio.wait(
-                task_group,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            # 取出任务
-            done = done.pop()
-            pending = pending.pop()
             # NOTE: 考虑这两种情况：
             # 1. 如果一个任务在发送阶段退出：
             #   这意味着对应发送的ws已经关闭或者出错
             #   那么另一个任务很快就会在接收该ws的时候引发异常而退出
             #   很快，最终两个任务都结束
+            #   **这时候pending 可能 为空，而done为两个任务**
             # 2. 如果一个任务在接收阶段退出：
             #   这意味着对应接收的ws已经关闭或者发生出错
             #   - 对于另一个任务的发送，可能会在发送的时候引发异常而退出
             #       - 可能指的是: wsproto后端的uvicorn发送消息永远不会出错
             #       - https://github.com/encode/uvicorn/discussions/2137
             #   - 对于另一个任务的接收，可能会等待很久，才能继续进行发送任务而引发异常而退出
+            #   **这时候pending一般为一个未结束任务**
             #
             #   因为第二种情况的存在，所以需要用 wait_for 强制让其退出
             #   但考虑到第一种情况，先等它 1s ，看看能否正常退出
             try:
-                await asyncio.wait_for(pending, timeout=1)
-            except asyncio.TimeoutError:
-                logging.debug(f"{pending} TimeoutError")
-
-            await _close_ws(
-                client_to_server_task=client_to_server_task,
-                server_to_client_task=server_to_client_task,
-                client_ws=websocket,
-                server_ws=proxy_ws,
-            )
+                _, pending = await asyncio.wait(
+                    task_group,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for pending_task in pending:  # NOTE: pending 一般为一个未结束任务，或者为空
+                    # 开始取消未结束的任务
+                    try:
+                        await asyncio.wait_for(pending_task, timeout=1)
+                    except asyncio.TimeoutError:
+                        logging.debug(f"{pending} TimeoutError, it's normal.")
+                    except Exception as e:
+                        # 取消期间可能另一个ws会发生异常，这个是正常情况，且会被 asyncio.wait_for 传播
+                        logging.debug(
+                            f"{pending} raise error when being canceled, it's normal. error: {e}"
+                        )
+            except Exception as e:  # pragma: no cover # 这个是保险分支，通常无法执行
+                logging.warning(
+                    f"Something wrong, please contact the developer. error: {e}"
+                )
+                raise
+            finally:
+                # 无论如何都要关闭两个websocket
+                # NOTE: 这时候两个任务都已经结束
+                await _close_ws(
+                    client_to_server_task=client_to_server_task,
+                    server_to_client_task=server_to_client_task,
+                    client_ws=websocket,
+                    server_ws=proxy_ws,
+                )
         return False
 
     @override
@@ -631,6 +664,9 @@ class BaseWebSocketProxy(BaseProxyModel):
         raise NotImplementedError()
 
 
+# FIXME: 目前无法正确转发目标服务器的响应，包括握手成功的响应头和握手失败的整个响应
+# 其中 握手成功的响应头 需要等待 httpx_ws 的支持
+# 握手失败的响应目前在uvicorn中无法实现
 class ReverseWebSocketProxy(BaseWebSocketProxy):
     """Reverse http proxy.
 
@@ -642,6 +678,11 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
         queue_size: refer to [httpx_ws.aconnect_ws][1]
         keepalive_ping_interval_seconds: refer to [httpx_ws.aconnect_ws][1]
         keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][1]
+
+    ISSUE: This WebSocket proxy can correctly forward request headers, but currently,
+        it is unable to properly forward responses from the target service,
+        including successful handshake response headers and
+        the entire response in case of a handshake failure.
 
     Examples:
         ```python
@@ -674,7 +715,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
     [1]: https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws
     """
 
-    client: AsyncClient
+    client: httpx.AsyncClient
     base_url: httpx.URL
     follow_redirects: bool
     max_message_size_bytes: int
@@ -685,7 +726,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
     @override
     def __init__(
         self,
-        client: Optional[AsyncClient] = None,
+        client: Optional[httpx.AsyncClient] = None,
         *,
         base_url: Union[httpx.URL, str],
         follow_redirects: bool = False,
@@ -732,7 +773,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
     @override
     async def proxy(  # pyright: ignore [reportIncompatibleMethodOverride]
         self, *, websocket: starlette_ws.WebSocket, path: Optional[str] = None
-    ) -> Union[JSONResponse, Literal[False]]:
+    ) -> Union[Literal[False], StarletteResponse]:
         """Establish websocket connection with client and target_url, then pass messages between them.
 
         Args:
@@ -742,8 +783,12 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
                 Usually, you don't need to pass this argument.
 
         Returns:
-            If the establish websocket connection failed, return a JSONResponse.
-            If the establish websocket connection success, will run forever until the connection is closed. Then return False.
+            Returns:
+            If the establish websocket connection failed:
+                - Will call `websocket.close()`
+                - Then return a StarletteResponse from target server
+            If the establish websocket connection success:
+                - Will run forever until the connection is closed. Then return False.
         """
         base_url = self.base_url
 
@@ -759,6 +804,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
             path=(base_url.path + path_param)
         )  # 耗时: 18.4 µs ± 262 ns
 
+        # self.send_request_to_target 内部会处理连接失败时，返回错误给客户端，所以这里不处理了
         return await self.send_request_to_target(
             websocket=websocket, target_url=target_url
         )

@@ -482,6 +482,7 @@ class ForwardHttpProxy(BaseHttpProxy):
             proxy_filter: Callable Filter, decide whether reject the proxy requests.
                 If None, will use the default filter.
         """
+        # TODO: 当前显式发出警告是有意设计，后续会取消警告
         self.proxy_filter = warn_for_none_filter(proxy_filter)
         super().__init__(client, follow_redirects=follow_redirects)
 
@@ -521,9 +522,14 @@ class ForwardHttpProxy(BaseHttpProxy):
             # NOTE: 在前向代理中，路径参数即为目标url。
             # TODO: 每次实例化URL都要消耗16.2 µs，考虑是否用lru_cache来优化
             target_url = httpx.URL(path_param)
-        except Exception as e:
+        except httpx.InvalidURL as e:  # pragma: no cover
+            # 这个错误应该是不会被引起的，因为接收到的path_param是经过校验的
+            # 但不排除有浏览器不遵守最大url长度限制，发出了超长的url导致InvalidURL错误
+            # 所以我们在这里记录这个严重错误，表示要去除 `pragma: no cover`
             return return_err_msg_response(
-                e, status_code=starlette_status.HTTP_400_BAD_REQUEST
+                e,
+                status_code=starlette_status.HTTP_400_BAD_REQUEST,
+                logger=logging.critical,
             )
 
         # 进行请求过滤
@@ -538,7 +544,7 @@ class ForwardHttpProxy(BaseHttpProxy):
             return await self.send_request_to_target(
                 request=request, target_url=target_url
             )
-        # 需要检查客户端输入的url是否合法
+        # 需要检查客户端输入的url是否合法，包括缺少scheme; 如果不合符会引发 _400 异常
         except _400_ERROR_NEED_TO_BE_CATCHED_IN_FORWARD_PROXY as e:
             return return_err_msg_response(
                 e, status_code=starlette_status.HTTP_400_BAD_REQUEST

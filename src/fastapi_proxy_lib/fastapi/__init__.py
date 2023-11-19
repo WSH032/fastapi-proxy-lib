@@ -1,10 +1,12 @@
-"""Module for fastapi app."""
+"""Module for fastapi. User-oriented helper functions.
 
-import logging
+Note: All user-oriented non-private functions (including local functions) must have documentation.
+"""
+
 from importlib.util import find_spec
 from textwrap import dedent
 
-if find_spec("fastapi") is None:
+if find_spec("fastapi") is None:  # pragma: no cover  # 无法测试
     msg = dedent(
         """\
         `fastapi` is not installed.
@@ -12,4 +14,4 @@ if find_spec("fastapi") is None:
             pip install fastapi-proxy[standard]
         """
     )
-    logging.critical(msg)
+    raise RuntimeError(msg)

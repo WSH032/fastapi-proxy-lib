@@ -21,7 +21,7 @@ from starlette import status
 from starlette.background import BackgroundTask as BackgroundTask_t
 from starlette.responses import JSONResponse
 from starlette.types import Scope
-from typing_extensions import overload
+from typing_extensions import deprecated, overload
 
 __all__ = (
     "check_base_url",
@@ -83,6 +83,7 @@ class ErrMsg(TypedDict):
         msg: equal to {str(error)}.
     """
 
+    # NOTE: `err_type` 和 `msg` 键是api设计的一部分
     err_type: str
     msg: str
 
@@ -102,6 +103,7 @@ class ErrRseponseJson(TypedDict):
     """
 
     # https://fastapi.tiangolo.com/tutorial/handling-errors/#httpexception
+    # NOTE: `detail` 键是api设计的一部分
     detail: ErrMsg
 
 
@@ -126,6 +128,9 @@ class _UnsupportedHttpVersionError(RuntimeError):
 #################### Tools ####################
 
 
+@deprecated(
+    "May or may not be removed in the future.", category=PendingDeprecationWarning
+)
 def reset_lru_get_url(maxsize: Union[int, None] = 128, typed: bool = False) -> None:
     """Reset the parameters or clear the cache of `lru_get_url`.
 
@@ -138,11 +143,17 @@ def reset_lru_get_url(maxsize: Union[int, None] = 128, typed: bool = False) -> N
     _lru_get_url = lru_cache(maxsize, typed)(_lru_get_url.__wrapped__)
 
 
+@deprecated(
+    "May or may not be removed in the future.", category=PendingDeprecationWarning
+)
 @lru_cache(maxsize=1024)
 def _lru_get_url(url: str) -> httpx.URL:
     return httpx.URL(url)
 
 
+@deprecated(
+    "May or may not be removed in the future.", category=PendingDeprecationWarning
+)
 def lru_get_url(url: str) -> httpx.URL:
     """Lru cache for httpx.URL(url)."""
     # 因为 lru 缓存返回的是可变对象，所以这里需要复制一份
@@ -210,14 +221,11 @@ def check_base_url(base_url: Union[httpx.URL, str], /) -> httpx.URL:
     # 我们在这里强制要求 base_url 以"/"结尾是有原因的:
     # 因为 RouterHelper 生成的路由是以"/"结尾的，在反向代理时
     # "/" 之后后路径参数将会被拼接到这个 base_url 后面
-    if not base_url.path.endswith("/"):
-        _path_0 = base_url.path.rsplit("/", 1)[0] + "/"
-        _path_1 = base_url.path + "/"
+    if not str(base_url).endswith("/"):
         msg = dedent(
             f"""\
             `base_url` must ends with "/", may be you mean:
-            {base_url.copy_with(path=_path_0)}
-            {base_url.copy_with(path=_path_1)}\
+            {base_url}/\
             """
         )
         raise BaseURLError(msg)
@@ -285,12 +293,10 @@ def return_err_msg_response(
     Returns:
         JSONResponse about error message.
     """
-    if isinstance(err, Mapping):
-        detail = err
-    elif isinstance(err, BaseException):  # pyright: ignore[reportUnnecessaryIsInstance]
+    if isinstance(err, BaseException):
         detail = ErrMsg(err_type=type(err).__name__, msg=str(err))
     else:
-        raise TypeError(f"error must be BaseException or ErrMsg, not {type(err)}.")
+        detail = err
 
     err_response_json = ErrRseponseJson(detail=detail)
 

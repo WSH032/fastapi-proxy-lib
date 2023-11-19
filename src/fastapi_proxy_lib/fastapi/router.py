@@ -1,6 +1,6 @@
-"""User-oriented helper functions.
+"""Utils for registering proxy to fastapi router.
 
-Note: All user-oriented non-private functions (including local functions) must have documentation.
+The low-level API for `fastapi_proxy_lib.fastapi.app`.
 """
 
 import asyncio
@@ -10,96 +10,31 @@ from typing import (
     Any,
     AsyncContextManager,
     AsyncIterator,
-    Awaitable,
     Callable,
-    Iterable,
     Literal,
     Optional,
     Set,
-    Tuple,
     TypeVar,
     Union,
 )
 
-import httpx
 from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.websockets import WebSocket
-from typing_extensions import deprecated, overload
+from typing_extensions import overload
 
 from fastapi_proxy_lib.core.http import ForwardHttpProxy, ReverseHttpProxy
 from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
+
+__all__ = ("RouterHelper",)
+
 
 _HttpProxyTypes = Union[ForwardHttpProxy, ReverseHttpProxy]
 _WebSocketProxyTypes = ReverseWebSocketProxy
 
 
-_T = TypeVar("_T")
-_T_co = TypeVar("_T_co", covariant=True)
-_LifeEventTypes = Callable[[_T_co], Awaitable[None]]
 _APIRouterTypes = TypeVar("_APIRouterTypes", bound=APIRouter)
-
-
-_HttpMethodTypes = Tuple[
-    Literal["get"],
-    Literal["post"],
-    Literal["put"],
-    Literal["delete"],
-    Literal["options"],
-    Literal["head"],
-    Literal["patch"],
-    Literal["trace"],
-]
-HTTP_METHODS: _HttpMethodTypes = (
-    "get",
-    "post",
-    "put",
-    "delete",
-    "options",
-    "head",
-    "patch",
-    "trace",
-)
-
-
-# https://fastapi.tiangolo.com/zh/advanced/events/
-@deprecated(
-    "May or may not be removed in the future.", category=PendingDeprecationWarning
-)
-def lifespan_event_factory(
-    *,
-    startup_events: Optional[Iterable[_LifeEventTypes[_T]]] = None,
-    shutdown_events: Optional[Iterable[_LifeEventTypes[_T]]] = None,
-) -> Callable[[_T], AsyncContextManager[None]]:
-    """Create lifespan event for app.
-
-    When the app startup, await all the startup events.
-    When the app shutdown, await all the shutdown events.
-
-    The `app` will pass into the event as the first argument.
-
-    Args:
-        startup_events:
-            An iterable container,
-            where each element is an asynchronous function
-            which needs to accept first positional parameter for `app`.
-        shutdown_events:
-            The same as `startup_events`.
-
-    Returns:
-        app lifespan event.
-    """
-
-    @asynccontextmanager
-    async def lifespan(app: _T) -> AsyncIterator[None]:
-        if startup_events is not None:
-            await asyncio.gather(*[event(app) for event in startup_events])
-        yield
-        if shutdown_events is not None:
-            await asyncio.gather(*[event(app) for event in shutdown_events])
-
-    return lifespan
 
 
 def _http_register_router(
@@ -181,13 +116,15 @@ class RouterHelper:
 
     def __init__(self) -> None:
         """Initialize RouterHelper."""
-        self._registered_clients: Set[httpx.AsyncClient] = set()
+        self._registered_proxy: Set[
+            Union[_HttpProxyTypes, _WebSocketProxyTypes]
+        ] = set()
         self._registered_router_id: Set[int] = set()
 
     @property
-    def registered_clients(self) -> Set[httpx.AsyncClient]:
-        """The httpx.AsyncClient that has been registered."""
-        return self._registered_clients
+    def registered_proxy(self) -> Set[Union[_HttpProxyTypes, _WebSocketProxyTypes]]:
+        """The proxy that has been registered."""
+        return self._registered_proxy
 
     @overload
     def register_router(
@@ -196,7 +133,8 @@ class RouterHelper:
         router: Optional[None] = None,
         **endpoint_kwargs: Any,
     ) -> APIRouter:
-        """If router is None, will create a new router."""
+        # If router is None, will create a new router.
+        ...
 
     @overload
     def register_router(
@@ -205,7 +143,8 @@ class RouterHelper:
         router: _APIRouterTypes,
         **endpoint_kwargs: Any,
     ) -> _APIRouterTypes:
-        """If router is not None, will use the given router."""
+        # If router is not None, will use the given router.
+        ...
 
     def register_router(
         self,
@@ -255,30 +194,29 @@ class RouterHelper:
                 f"only support: {_HttpProxyTypes} and {_WebSocketProxyTypes}"
             )
             raise TypeError(msg)
-        self._registered_clients.add(proxy.client)
+
+        self._registered_proxy.add(proxy)
         return router
 
     def get_lifespan(self) -> Callable[..., AsyncContextManager[None]]:
-        """The lifespan event for closing registered clients.
+        """The lifespan event for closing registered proxy.
 
         Returns:
-            asynccontextmanager for closing registered clients.
+            asynccontextmanager for closing registered proxy.
         """
 
         @asynccontextmanager
         async def shutdown_clients(*_: Any, **__: Any) -> AsyncIterator[None]:
-            """Asynccontextmanager for closing registered clients.
+            """Asynccontextmanager for closing registered proxy.
 
             Args:
                 *_: Whatever.
                 **__: Whatever.
 
             Returns:
-                When __aexit__ is called, will close all registered clients.
+                When __aexit__ is called, will close all registered proxy.
             """
             yield
-            await asyncio.gather(
-                *[client.aclose() for client in self.registered_clients]
-            )
+            await asyncio.gather(*[proxy.aclose() for proxy in self.registered_proxy])
 
         return shutdown_clients

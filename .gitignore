@@ -151,5 +151,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# only track the `extensions.json`
 /.vscode/*
 !/.vscode/extensions.json
+
+# ignore temporary files
+Untitled*.ipynb
+Untitled*.py

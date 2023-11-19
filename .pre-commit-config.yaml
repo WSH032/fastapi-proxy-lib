@@ -5,6 +5,8 @@
 # default_language_version:
 #   python: python3.10
 
+default_install_hook_types: [pre-commit, commit-msg]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
@@ -28,14 +30,22 @@ repos:
     rev: 23.10.0
     hooks:
       - id: black
-  - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.332
-    hooks:
-      - id: pyright
-        args: [-p, ".pre-commit-pyrightconfig.json"] # ignore `reportMissingImports`
+  # # pyright will be performed by `hatch run lint`
+  # # because pyright requires a actual testing environment with all dependencies installed
+  # - repo: https://github.com/RobertCraigie/pyright-python
+  #   rev: v1.1.332
+  #   hooks:
+  #     - id: pyright
+  #       args: [-p, ".pre-commit-pyrightconfig.json"] # ignore `reportMissingImports`
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.6
     hooks:
       - id: codespell
         additional_dependencies:
           - tomli
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: v9.9.0
+    hooks:
+      - id: commitlint
+        stages: [commit-msg]
+        additional_dependencies: ["@commitlint/config-angular"]
