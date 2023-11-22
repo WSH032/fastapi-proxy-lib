@@ -1,6 +1,6 @@
 """Utils for getting a fastapi proxy app.
 
-The high-level API for `fastapi_proxy_lib.fastapi.router`.
+The high-level API for [fastapi_proxy_lib.fastapi.router][].
 """
 
 from typing import Optional, Union
@@ -44,16 +44,21 @@ def _proxy2app(proxy: Union[_HttpProxyTypes, _WebSocketProxyTypes]) -> FastAPI:
     return app
 
 
-def forward_http_app(  # noqa: D417
+def forward_http_app(
     client: Optional[httpx.AsyncClient] = None,
     *,
-    proxy_filter: Optional[ProxyFilterProto] = None,
     follow_redirects: bool = False,
+    proxy_filter: Optional[ProxyFilterProto] = None,
 ) -> FastAPI:
     """Fastapi app factory for forward http proxy.
 
+    Examples:
+        The same as [`ForwardHttpProxy.__init__`][fastapi_proxy_lib.core.http.ForwardHttpProxy.__init__].
+
     Args:
-        refer to `fastapi_proxy_lib.core.http.ForwardHttpProxy`.
+        client: refer to [`ForwardHttpProxy`][fastapi_proxy_lib.core.http.ForwardHttpProxy].
+        follow_redirects: refer to [`ForwardHttpProxy`][fastapi_proxy_lib.core.http.ForwardHttpProxy].
+        proxy_filter: refer to [`ForwardHttpProxy`][fastapi_proxy_lib.core.http.ForwardHttpProxy].
     """
     forward_http_proxy = ForwardHttpProxy(
         client, proxy_filter=proxy_filter, follow_redirects=follow_redirects
@@ -62,7 +67,7 @@ def forward_http_app(  # noqa: D417
     return _proxy2app(forward_http_proxy)
 
 
-def reverse_http_app(  # noqa: D417
+def reverse_http_app(
     client: Optional[httpx.AsyncClient] = None,
     *,
     base_url: Union[httpx.URL, str],
@@ -70,8 +75,13 @@ def reverse_http_app(  # noqa: D417
 ) -> FastAPI:
     """Fastapi app factory for reverse http proxy.
 
+    Examples:
+        The same as [`ReverseHttpProxy.__init__`][fastapi_proxy_lib.core.http.ReverseHttpProxy.__init__].
+
     Args:
-        refer to `fastapi_proxy_lib.core.http.ReverseHttpProxy`.
+        client: refer to [`ReverseHttpProxy`][fastapi_proxy_lib.core.http.ReverseHttpProxy].
+        base_url: refer to [`ReverseHttpProxy`][fastapi_proxy_lib.core.http.ReverseHttpProxy].
+        follow_redirects: refer to [`ReverseHttpProxy`][fastapi_proxy_lib.core.http.ReverseHttpProxy].
     """
     reverse_http_proxy = ReverseHttpProxy(
         client,
@@ -82,7 +92,7 @@ def reverse_http_app(  # noqa: D417
     return _proxy2app(reverse_http_proxy)
 
 
-def reverse_ws_app(  # noqa: D417
+def reverse_ws_app(
     client: Optional[httpx.AsyncClient] = None,
     *,
     base_url: Union[httpx.URL, str],
@@ -98,8 +108,17 @@ def reverse_ws_app(  # noqa: D417
 ) -> FastAPI:
     """Fastapi app factory for reverse ws proxy.
 
+    Examples:
+        The same as [`ReverseWebSocketProxy.__init__`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy.__init__].
+
     Args:
-        refer to `fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy`.
+        client: refer to [`ReverseWebSocketProxy`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy].
+        base_url: refer to [`ReverseWebSocketProxy`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy].
+        follow_redirects: refer to [`ReverseWebSocketProxy`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy].
+        max_message_size_bytes: refer to [`ReverseWebSocketProxy`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy].
+        queue_size: refer to [`ReverseWebSocketProxy`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy].
+        keepalive_ping_interval_seconds: refer to [`ReverseWebSocketProxy`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy].
+        keepalive_ping_timeout_seconds: refer to [`ReverseWebSocketProxy`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy].
     """
     reverse_websocket_proxy = ReverseWebSocketProxy(
         client,

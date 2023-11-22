@@ -43,7 +43,7 @@ dynamic = ["version"]
 dependencies = ["httpx", "httpx-ws", "starlette", "typing_extensions>=4.5.0"]
 
 [project.urls]
-# Documentation = "..."
+Documentation = "https://WSH032.github.io/fastapi-proxy-lib/"
 "Source code" = "https://github.com/WSH032/fastapi-proxy-lib"
 
 [project.optional-dependencies]
@@ -80,13 +80,28 @@ dependencies = [
 test = "pytest tests/ --cov-report=html --cov"
 # ruff must before black
 lint = ["- ruff --fix .", "- black .", "- pyright .", "- codespell . -i 3 -w"]
-lint-check = ["ruff .", "black --check .", "pyright .", "codespell ."]
-all = ["lint-check", "test"]
+lint-check = [
+    "ruff .",
+    "black --check .",
+    "pyright .",
+    "pyright --verifytypes fastapi_proxy_lib --ignoreexternal",
+    "codespell .",
+]
+check-all = ["lint-check", "test"]
 
 # https://hatch.pypa.io/latest/config/environment/overview/#detached-environments
 [tool.hatch.envs.docs]
+path = ".venv-docs"
 detached = true
-dependencies = ["mkdocs-material == 9.4.6", "mkdocstrings[python] == 0.23.0"]
+dependencies = [
+    "mkdocs-material == 9.*",
+    "mkdocstrings[python] == 0.24.0",
+    "mkdocs-gen-files == 0.5.0",
+    "mkdocs-literate-nav == 0.6.1",
+    "mkdocs-section-index == 0.3.8",
+    "mkdocs-git-revision-date-localized-plugin == 1.*",
+    "mkdocs-git-committers-plugin-2 == 2.*",
+]
 
 [tool.hatch.envs.docs.scripts]
 docs-serve = "mkdocs serve"
@@ -195,7 +210,7 @@ exclude_also = [
 
 [tool.codespell]
 # https://github.com/codespell-project/codespell/issues/1887
-skip = "./htmlcov" # pytest-cov report files
+skip = "./htmlcov,./site"
 
 
 [tool.pytest.ini_options]

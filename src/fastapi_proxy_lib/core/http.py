@@ -77,12 +77,12 @@ class _ReverseProxyServerError(RuntimeError):
 #################### Constant ####################
 
 # https://developer.mozilla.org/docs/Web/HTTP/Methods
-NON_REQUEST_BODY_METHODS = ("GET", "HEAD", "OPTIONS", "TRACE")
+_NON_REQUEST_BODY_METHODS = ("GET", "HEAD", "OPTIONS", "TRACE")
 """The http methods that should not contain request body."""
 
 # https://asgi.readthedocs.io/en/latest/specs/www.html#http-connection-scope
 SUPPORTED_HTTP_VERSIONS = ("1.0", "1.1")
-"""The http versions that we supported now. It depends on httpx."""
+"""The http versions that we supported now. It depends on `httpx`."""
 
 # https://www.python-httpx.org/exceptions/
 _400_ERROR_NEED_TO_BE_CATCHED_IN_FORWARD_PROXY = (
@@ -214,8 +214,8 @@ class BaseHttpProxy(BaseProxyModel):
     """Http proxy base class.
 
     Attributes:
-        client: The httpx.AsyncClient to send http requests.
-        follow_redirects: Whether follow redirects of proxy server.
+        client: The `httpx.AsyncClient` to send http requests.
+        follow_redirects: Whether follow redirects of target server.
     """
 
     @override
@@ -224,7 +224,7 @@ class BaseHttpProxy(BaseProxyModel):
     ) -> StarletteResponse:
         """Change request headers and send request to target url.
 
-        - The http version of request must be in `{SUPPORTED_HTTP_VERSIONS}`.
+        - The http version of request must be in [`SUPPORTED_HTTP_VERSIONS`][fastapi_proxy_lib.core.http.SUPPORTED_HTTP_VERSIONS].
 
         Args:
             request: the original client request.
@@ -248,7 +248,7 @@ class BaseHttpProxy(BaseProxyModel):
 
         # 有些方法不应该包含主体
         request_content = (
-            None if request.method in NON_REQUEST_BODY_METHODS else request.stream()
+            None if request.method in _NON_REQUEST_BODY_METHODS else request.stream()
         )
 
         # NOTE: 不要在这里catch `client.build_request` 和 `client.send` 的异常，因为通常来说
@@ -300,41 +300,41 @@ class BaseHttpProxy(BaseProxyModel):
 
 
 class ReverseHttpProxy(BaseHttpProxy):
-    """Reverse http proxy.
+    '''Reverse http proxy.
 
     Attributes:
-        client: The httpx.AsyncClient to send http requests.
-        follow_redirects: Whether follow redirects of proxy server.
-        base_url: The target proxy server url.
+        client: The [`httpx.AsyncClient`](https://www.python-httpx.org/api/#asyncclient) to send http requests.
+        follow_redirects: Whether follow redirects of target server.
+        base_url: The target server url.
 
     Examples:
         ```python
         from contextlib import asynccontextmanager
+        from typing import AsyncIterator
 
-        from fastapi import FastAPI, WebSocket
+        from fastapi import FastAPI, Request
+        from fastapi_proxy_lib.core.http import ReverseHttpProxy
         from httpx import AsyncClient
 
-        def close_client_event(close_event):
-            @asynccontextmanager
-            async def lifespan(app: FastAPI):
-                yield
-                await close_event
+        proxy = ReverseHttpProxy(AsyncClient(), base_url="https://www.example.com/")
 
-            return lifespan
+        @asynccontextmanager
+        async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
+            """Close proxy."""
+            yield
+            await proxy.aclose()
 
-        client = AsyncClient()
-        proxy = ReverseHttpProxy(client, base_url="https://www.example.com")
-        app = FastAPI(lifespan=close_client_event(client.aclose()))
+        app = FastAPI(lifespan=close_proxy_event)
 
         @app.get("/{path:path}")
         async def _(request: Request, path: str = ""):
             return await proxy.proxy(request=request, path=path)
 
-        # Then run cmd: `uvicorn <your.py>:app`
+        # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
         # visit the app: `http://127.0.0.1:8000/`
-        # you will get the response from `https://www.example.com`
+        # you will get the response from `https://www.example.com/`
         ```
-    """
+    '''
 
     client: httpx.AsyncClient
     follow_redirects: bool
@@ -350,16 +350,16 @@ class ReverseHttpProxy(BaseHttpProxy):
     ) -> None:
         """Reverse http proxy.
 
-        - NOTE: please make sure base_url is available.
+        Note: please make sure `base_url` is available.
             Because when an error occurs,
-            we cannot distinguish whether it is a server network error, or it is a error of base_url.
+            we cannot distinguish whether it is a proxy server network error, or it is a error of `base_url`.
             So, we will return 502 status_code whatever the error is.
 
         Args:
-            client: The httpx.AsyncClient to send http requests. Defaults to None.
-                if None, will create a new httpx.AsyncClient,
-                else will use the given httpx.AsyncClient.
-            follow_redirects: Whether follow redirects of proxy server. Defaults to False.
+            client: The `httpx.AsyncClient` to send http requests. Defaults to None.
+                if None, will create a new `httpx.AsyncClient`,
+                else will use the given `httpx.AsyncClient`.
+            follow_redirects: Whether follow redirects of target server. Defaults to False.
             base_url: The target proxy server url.
         """
         self.base_url = check_base_url(base_url)
@@ -369,16 +369,16 @@ class ReverseHttpProxy(BaseHttpProxy):
     async def proxy(  # pyright: ignore [reportIncompatibleMethodOverride]
         self, *, request: StarletteRequest, path: Optional[str] = None
     ) -> StarletteResponse:
-        """Send request to proxy server.
+        """Send request to target server.
 
         Args:
-            request: starlette.requests.Request
+            request: `starlette.requests.Request`
             path: The path params of request, which means the path params of base url.
                 If None, will get it from `request.path_params`.
-                Usually, you don't need to pass this argument.
+                **Usually, you don't need to pass this argument**.
 
         Returns:
-            The response from proxy server.
+            The response from target server.
         """
         base_url = self.base_url
 
@@ -423,42 +423,42 @@ class ReverseHttpProxy(BaseHttpProxy):
 
 
 class ForwardHttpProxy(BaseHttpProxy):
-    """Forward http proxy.
+    '''Forward http proxy.
 
     Attributes:
-        client: The httpx.AsyncClient to send http requests.
-        follow_redirects: Whether follow redirects of proxy server.
-        proxy_access_strategy: The strategy to decide
-            whether accept the proxy requestby the given url.
+        client: The [`httpx.AsyncClient`](https://www.python-httpx.org/api/#asyncclient) to send http requests.
+        follow_redirects: Whether follow redirects of target server.
+        proxy_filter: Callable Filter, decide whether reject the proxy requests.
 
     Examples:
         ```python
         from contextlib import asynccontextmanager
+        from typing import AsyncIterator
 
-        from fastapi import FastAPI, WebSocket
+        from fastapi import FastAPI, Request
+        from fastapi_proxy_lib.core.http import ForwardHttpProxy
+        from fastapi_proxy_lib.core.tool import default_proxy_filter
         from httpx import AsyncClient
 
-        def close_client_event(close_event):
-            @asynccontextmanager
-            async def lifespan(app: FastAPI):
-                yield
-                await close_event
+        proxy = ForwardHttpProxy(AsyncClient(), proxy_filter=default_proxy_filter)
 
-            return lifespan
+        @asynccontextmanager
+        async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
+            """Close proxy."""
+            yield
+            await proxy.aclose()
 
-        client = AsyncClient()
-        proxy = ForwardHttpProxy(client)
-        app = FastAPI(lifespan=close_client_event(client.aclose()))
+        app = FastAPI(lifespan=close_proxy_event)
 
         @app.get("/{path:path}")
         async def _(request: Request, path: str = ""):
             return await proxy.proxy(request=request, path=path)
 
-        # Then run cmd: `uvicorn <your.py>:app`
+        # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
         # visit the app: `http://127.0.0.1:8000/https://www.example.com`
         # you will get the response from `https://www.example.com`
         ```
-    """
+    '''
 
     client: httpx.AsyncClient
     follow_redirects: bool
@@ -469,16 +469,16 @@ class ForwardHttpProxy(BaseHttpProxy):
         self,
         client: Optional[httpx.AsyncClient] = None,
         *,
-        proxy_filter: Optional[ProxyFilterProto] = None,
         follow_redirects: bool = False,
+        proxy_filter: Optional[ProxyFilterProto] = None,
     ) -> None:
         """Forward http proxy.
 
         Args:
-            client: The httpx.AsyncClient to send http requests. Defaults to None.
-                if None, will create a new httpx.AsyncClient,
-                else will use the given httpx.AsyncClient.
-            follow_redirects: Whether follow redirects of proxy server. Defaults to False.
+            client: The `httpx.AsyncClient` to send http requests. Defaults to None.
+                If None, will create a new `httpx.AsyncClient`,
+                else will use the given `httpx.AsyncClient`.
+            follow_redirects: Whether follow redirects of target server. Defaults to False.
             proxy_filter: Callable Filter, decide whether reject the proxy requests.
                 If None, will use the default filter.
         """
@@ -493,16 +493,16 @@ class ForwardHttpProxy(BaseHttpProxy):
         request: StarletteRequest,
         path: Optional[str] = None,
     ) -> StarletteResponse:
-        """Send request to proxy server.
+        """Send request to target server.
 
         Args:
-            request: starlette.requests.Request
+            request: `starlette.requests.Request`
             path: The path params of request, which means the full url of target server.
-                If None, will get it from request.path_params.
-                Usually, you don't need to pass this argument.
+                If None, will get it from `request.path_params`.
+                **Usually, you don't need to pass this argument**.
 
         Returns:
-            The response from proxy server.
+            The response from target server.
         """
         proxy_filter = self.proxy_filter
 

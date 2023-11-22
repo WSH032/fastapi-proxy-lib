@@ -4,7 +4,7 @@
 import asyncio
 from contextlib import AsyncExitStack
 from multiprocessing import Process, Queue
-from typing import Any, Mapping
+from typing import Any, Dict, Literal, Optional
 
 import httpx
 import httpx_ws
@@ -27,7 +27,14 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 0
 DEFAULT_CONTX_EXIT_TIMEOUT = 5
 
-NEED_TESTED_WS_BACKENDS = ("websockets", "wsproto")
+# WS_BACKENDS_NEED_BE_TESTED = ("websockets", "wsproto")
+# # FIXME: wsproto 有问题，暂时不测试
+# # ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+# # https://github.com/encode/uvicorn/discussions/2105
+WS_BACKENDS_NEED_BE_TESTED = ("websockets",)
+
+# https://www.python-httpx.org/advanced/#http-proxying
+NO_PROXIES: Dict[Any, Any] = {"all://": None}
 
 
 def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
@@ -61,8 +68,8 @@ def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
 
 def _subprocess_run_httpx_ws(
     queue: "Queue[str]",
-    kwargs_async_client: Mapping[str, Any] = {},
-    kwargs_aconnect_ws: Mapping[str, Any] = {},
+    kwargs_async_client: Optional[Dict[str, Any]] = None,
+    kwargs_aconnect_ws: Optional[Dict[str, Any]] = None,
 ):
     """Run aconnect_ws in subprocess.
 
@@ -71,10 +78,15 @@ def _subprocess_run_httpx_ws(
         kwargs_async_client: The kwargs for `httpx.AsyncClient`
         kwargs_aconnect_ws: The kwargs for `httpx_ws.aconnect_ws`
     """
+    kwargs_async_client = kwargs_async_client or {}
+    kwargs_aconnect_ws = kwargs_aconnect_ws or {}
+
+    kwargs_async_client.pop("proxies", None)
+    kwargs_aconnect_ws.pop("client", None)
 
     async def run():
         _exit_stack = AsyncExitStack()
-        _temp_client = httpx.AsyncClient(**kwargs_async_client)
+        _temp_client = httpx.AsyncClient(proxies=NO_PROXIES, **kwargs_async_client)
         _ = await _exit_stack.enter_async_context(
             aconnect_ws(
                 client=_temp_client,
@@ -93,7 +105,7 @@ class TestReverseWsProxy(AbstractTestProxy):
     """For testing reverse websocket proxy."""
 
     @override
-    @pytest.fixture(params=NEED_TESTED_WS_BACKENDS)
+    @pytest.fixture(params=WS_BACKENDS_NEED_BE_TESTED)
     async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         uvicorn_server_fixture: UvicornServerFixture,
@@ -113,7 +125,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         target_server_base_url = str(target_ws_server.contx_socket_url)
 
-        client_for_conn_to_target_server = httpx.AsyncClient()
+        client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
 
         reverse_ws_app = get_reverse_ws_app(
             client=client_for_conn_to_target_server, base_url=target_server_base_url
@@ -128,7 +140,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
 
-        client_for_conn_to_proxy_server = httpx.AsyncClient()
+        client_for_conn_to_proxy_server = httpx.AsyncClient(proxies=NO_PROXIES)
 
         return Tool4TestFixture(
             client_for_conn_to_target_server=client_for_conn_to_target_server,
@@ -198,7 +210,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         aconnect_ws_subprocess_queue: "Queue[str]" = Queue()
 
-        kwargs_async_client = {}
+        kwargs_async_client = {"proxies": NO_PROXIES}
         kwargs_aconnect_ws = {"url": proxy_server_base_url + "do_nothing"}
         kwargs = {
             "kwargs_async_client": kwargs_async_client,
@@ -236,8 +248,9 @@ class TestReverseWsProxy(AbstractTestProxy):
     # FIXME: 调查为什么收到关闭代码需要40s
     @pytest.mark.timeout(60)
     @pytest.mark.anyio()
+    @pytest.mark.parametrize("ws_backend", WS_BACKENDS_NEED_BE_TESTED)
     async def test_target_server_shutdown_abnormally(
-        self,
+        self, ws_backend: Literal["websockets", "wsproto"]
     ) -> None:
         """测试因为目标服务器突然断连导致的，ws桥接异常关闭.
 
@@ -248,7 +261,7 @@ class TestReverseWsProxy(AbstractTestProxy):
         target_ws_server_subprocess = Process(
             target=_subprocess_run_echo_ws_uvicorn_server,
             args=(subprocess_queue,),
-            kwargs={"port": DEFAULT_PORT, "host": DEFAULT_HOST},
+            kwargs={"port": DEFAULT_PORT, "host": DEFAULT_HOST, "ws": ws_backend},
         )
         target_ws_server_subprocess.start()
 
@@ -257,21 +270,25 @@ class TestReverseWsProxy(AbstractTestProxy):
             await asyncio.sleep(0.1)
         target_server_base_url = subprocess_queue.get()
 
-        client_for_conn_to_target_server = httpx.AsyncClient()
+        client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
 
         reverse_ws_app = get_reverse_ws_app(
             client=client_for_conn_to_target_server, base_url=target_server_base_url
         )
 
         async with UvicornServer(
-            uvicorn.Config(reverse_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST)
+            uvicorn.Config(
+                reverse_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=ws_backend
+            )
         ) as proxy_ws_server:
             proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
 
             async with aconnect_ws(
-                proxy_server_base_url + "do_nothing", httpx.AsyncClient()
+                proxy_server_base_url + "do_nothing",
+                httpx.AsyncClient(proxies=NO_PROXIES),
             ) as ws0, aconnect_ws(
-                proxy_server_base_url + "do_nothing", httpx.AsyncClient()
+                proxy_server_base_url + "do_nothing",
+                httpx.AsyncClient(proxies=NO_PROXIES),
             ) as ws1:
                 # force shutdown target server
                 target_ws_server_subprocess.terminate()

@@ -1,13 +1,15 @@
-"""Module for fastapi. User-oriented helper functions.
+"""Module for [`fastapi`](https://fastapi.tiangolo.com/).
 
-Note: All user-oriented non-private functions (including local functions) must have documentation.
+User-oriented helper functions.
 """
+
+# NOTE: All user-oriented non-private functions (including local functions) must have documentation.
 
 from importlib.util import find_spec
 from textwrap import dedent
 
 if find_spec("fastapi") is None:  # pragma: no cover  # 无法测试
-    msg = dedent(
+    msg: str = dedent(
         """\
         `fastapi` is not installed.
         `fastapi_proxy.app` module requires installing `fastapi` first:

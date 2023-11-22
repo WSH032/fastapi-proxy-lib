@@ -56,9 +56,10 @@ class BaseProxyModel(abc.ABC):
                 - If is http proxy response, should return starlette.responses.Response.
                 - If is websocket proxy, just establish the connection between client and target server.
         """
+        raise NotImplementedError()
 
     @abc.abstractmethod
-    async def proxy(self, *args: Any, **kwargs: Any):
+    async def proxy(self, *args: Any, **kwargs: Any) -> Any:
         """A user-facing high-level method that encapsulates the `self.send_request_to_target()` method.
 
         Receives the raw incoming parameters from the app,
@@ -66,3 +67,4 @@ class BaseProxyModel(abc.ABC):
         or independently determines the specific internal implementation.
         Its return value should be consistent with that of send_request_to_target.
         """
+        raise NotImplementedError()

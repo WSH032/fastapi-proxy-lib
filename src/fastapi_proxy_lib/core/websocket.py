@@ -73,7 +73,7 @@ class _ClientServerProxyTask(NamedTuple):
 
 # https://asgi.readthedocs.io/en/latest/specs/www.html#websocket-connection-scope
 SUPPORTED_WS_HTTP_VERSIONS = ("1.1",)
-"""The http versions that we supported now. It depends on httpx."""
+"""The http versions that we supported now. It depends on `httpx`."""
 
 
 #################### Error ####################
@@ -425,14 +425,15 @@ class BaseWebSocketProxy(BaseProxyModel):
     """Websocket proxy base class.
 
     Attributes:
-        client: The httpx.AsyncClient to establish websocket connection.
-        follow_redirects: Whether follow redirects of proxy server.
-        max_message_size_bytes: refer to [httpx_ws.aconnect_ws][1]
-        queue_size: refer to [httpx_ws.aconnect_ws][1]
-        keepalive_ping_interval_seconds: refer to [httpx_ws.aconnect_ws][1]
-        keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][1]
+        client: The [`httpx.AsyncClient`](https://www.python-httpx.org/api/#asyncclient) to establish websocket connection.
+        follow_redirects: Whether follow redirects of target server.
+        max_message_size_bytes: refer to [httpx_ws.aconnect_ws][]
+        queue_size: refer to [httpx_ws.aconnect_ws][]
+        keepalive_ping_interval_seconds: refer to [httpx_ws.aconnect_ws][]
+        keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][]
 
-    [1]: https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws
+    Tip:
+        [`httpx_ws.aconnect_ws`](https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws)
     """
 
     client: httpx.AsyncClient
@@ -460,17 +461,18 @@ class BaseWebSocketProxy(BaseProxyModel):
         """Http proxy base class.
 
         Args:
-            client: The httpx.AsyncClient to send http requests. Defaults to None.
-                if None, will create a new httpx.AsyncClient,
-                else will use the given httpx.AsyncClient.
-            follow_redirects: Whether follow redirects of proxy server. Defaults to False.
+            client: The `httpx.AsyncClient` to send http requests. Defaults to None.
+                If None, will create a new `httpx.AsyncClient`,
+                else will use the given `httpx.AsyncClient`.
+            follow_redirects: Whether follow redirects of target server. Defaults to False.
 
-            max_message_size_bytes: refer to [httpx_ws.aconnect_ws][1]
-            queue_size: refer to [httpx_ws.aconnect_ws][1]
-            keepalive_ping_interval_seconds: refer to [httpx_ws.aconnect_ws][1]
-            keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][1]
+            max_message_size_bytes: refer to [httpx_ws.aconnect_ws][]
+            queue_size: refer to [httpx_ws.aconnect_ws][]
+            keepalive_ping_interval_seconds: refer to [httpx_ws.aconnect_ws][]
+            keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][]
 
-        [1]: https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws
+        Tip:
+            [`httpx_ws.aconnect_ws`](https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws)
         """
         self.max_message_size_bytes = max_message_size_bytes
         self.queue_size = queue_size
@@ -485,19 +487,19 @@ class BaseWebSocketProxy(BaseProxyModel):
         websocket: starlette_ws.WebSocket,
         target_url: httpx.URL,
     ) -> Union[Literal[False], StarletteResponse]:
-        """Establish websocket connection with client and target_url, then pass messages between them.
+        """Establish websocket connection for both client and target_url, then pass messages between them.
 
-        - The http version of request must be in `{SUPPORTED_HTTP_VERSIONS}`.
+        - The http version of request must be in [`SUPPORTED_WS_HTTP_VERSIONS`][fastapi_proxy_lib.core.websocket.SUPPORTED_WS_HTTP_VERSIONS].
 
         Args:
             websocket: The client websocket requests.
             target_url: The url of target websocket server.
 
         Returns:
-            If the establish websocket connection failed:
-                - Will call `websocket.close()`
-                - Then return a StarletteResponse from target server
-            If the establish websocket connection success:
+            If the establish websocket connection unsuccessfully:
+                - Will call `websocket.close()` to send code `4xx`
+                - Then return a `StarletteResponse` from target server
+            If the establish websocket connection successfully:
                 - Will run forever until the connection is closed. Then return False.
         """
         client = self.client
@@ -665,55 +667,63 @@ class BaseWebSocketProxy(BaseProxyModel):
 
 
 # FIXME: 目前无法正确转发目标服务器的响应，包括握手成功的响应头和握手失败的整个响应
-# 其中 握手成功的响应头 需要等待 httpx_ws 的支持
+# 其中 握手成功的响应头 需要等待 httpx_ws 的支持: https://github.com/frankie567/httpx-ws/pull/54
 # 握手失败的响应目前在uvicorn中无法实现
+# FIXME: 意外关闭时候的关闭码无法确定
 class ReverseWebSocketProxy(BaseWebSocketProxy):
-    """Reverse http proxy.
+    '''Reverse http proxy.
 
     Attributes:
-        client: The httpx.AsyncClient to send http requests.
+        client: The `httpx.AsyncClient` to establish websocket connection.
         base_url: The target proxy server url.
-        follow_redirects: Whether follow redirects of proxy server.
-        max_message_size_bytes: refer to [httpx_ws.aconnect_ws][1]
-        queue_size: refer to [httpx_ws.aconnect_ws][1]
-        keepalive_ping_interval_seconds: refer to [httpx_ws.aconnect_ws][1]
-        keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][1]
+        follow_redirects: Whether follow redirects of target server.
+        max_message_size_bytes: refer to [httpx_ws.aconnect_ws][]
+        queue_size: refer to [httpx_ws.aconnect_ws][]
+        keepalive_ping_interval_seconds: refer to [httpx_ws.aconnect_ws][]
+        keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][]
 
-    ISSUE: This WebSocket proxy can correctly forward request headers, but currently,
+    Tip:
+        [`httpx_ws.aconnect_ws`](https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws)
+
+    Bug: There is a issue for handshake response:
+        This WebSocket proxy can correctly forward request headers.
+        But currently,
         it is unable to properly forward responses from the target service,
         including successful handshake response headers and
         the entire response in case of a handshake failure.
 
+        **In most cases, you don't need to worry about this.**
+        It only affects the HTTP handshake before establishing the WebSocket,
+        and regular WebSocket messages will be forwarded correctly.
+
     Examples:
         ```python
         from contextlib import asynccontextmanager
+        from typing import AsyncIterator
 
         from fastapi import FastAPI, WebSocket
+        from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
         from httpx import AsyncClient
 
-        def close_client_event(close_event):
-            @asynccontextmanager
-            async def lifespan(app: FastAPI):
-                yield
-                await close_event
+        proxy = ReverseWebSocketProxy(AsyncClient(), base_url="ws://echo.websocket.events/")
 
-            return lifespan
+        @asynccontextmanager
+        async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
+            """Close proxy."""
+            yield
+            await proxy.aclose()
 
-        client = AsyncClient()
-        proxy = ReverseWebSocketProxy(client, base_url="ws://echo.websocket.events")
-        app = FastAPI(lifespan=close_client_event(client.aclose()))
+        app = FastAPI(lifespan=close_proxy_event)
 
         @app.websocket_route("/{path:path}")
         async def _(websocket: WebSocket, path: str = ""):
             return await proxy.proxy(websocket=websocket, path=path)
 
-        # Then run cmd: `uvicorn <your.py>:app`
+        # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
         # visit the app: `ws://127.0.0.1:8000/`
         # you can establish websocket connection with `ws://echo.websocket.events`
         ```
-
-    [1]: https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws
-    """
+    '''
 
     client: httpx.AsyncClient
     base_url: httpx.URL
@@ -741,24 +751,24 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
     ) -> None:
         """Reverse http proxy.
 
-        - NOTE: please make sure base_url is available.
+        Note: please make sure `base_url` is available.
             Because when an error occurs,
-            we cannot distinguish whether it is a server network error,
-            or it is a error of base_url.
+            we cannot distinguish whether it is a proxy server network error, or it is a error of `base_url`.
 
         Args:
             base_url: The target proxy server url.
-            client: The httpx.AsyncClient to send http requests. Defaults to None.
-                if None, will create a new httpx.AsyncClient,
-                else will use the given httpx.AsyncClient.
-            follow_redirects: Whether follow redirects of proxy server. Defaults to False.
+            client: The `httpx.AsyncClient` to establish websocket connection. Defaults to None.
+                if None, will create a new `httpx.AsyncClient`,
+                else will use the given `httpx.AsyncClient`.
+            follow_redirects: Whether follow redirects of target server. Defaults to False.
 
-            max_message_size_bytes: refer to [httpx_ws.aconnect_ws][1]
-            queue_size: refer to [httpx_ws.aconnect_ws][1]
-            keepalive_ping_interval_seconds: refer to [httpx_ws.aconnect_ws][1]
-            keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][1]
+            max_message_size_bytes: refer to [httpx_ws.aconnect_ws][]
+            queue_size: refer to [httpx_ws.aconnect_ws][]
+            keepalive_ping_interval_seconds: refer to [httpx_ws.aconnect_ws][]
+            keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][]
 
-        [1]: https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws
+        Tip:
+            [`httpx_ws.aconnect_ws`](https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws)
         """
         self.base_url = check_base_url(base_url)
         super().__init__(
@@ -774,20 +784,19 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
     async def proxy(  # pyright: ignore [reportIncompatibleMethodOverride]
         self, *, websocket: starlette_ws.WebSocket, path: Optional[str] = None
     ) -> Union[Literal[False], StarletteResponse]:
-        """Establish websocket connection with client and target_url, then pass messages between them.
+        """Establish websocket connection for both client and target_url, then pass messages between them.
 
         Args:
             websocket: The client websocket requests.
             path: The path params of websocket request, which means the path params of base url.
                 If None, will get it from `websocket.path_params`.
-                Usually, you don't need to pass this argument.
+                **Usually, you don't need to pass this argument**.
 
         Returns:
-            Returns:
-            If the establish websocket connection failed:
-                - Will call `websocket.close()`
-                - Then return a StarletteResponse from target server
-            If the establish websocket connection success:
+            If the establish websocket connection unsuccessfully:
+                - Will call `websocket.close()` to send code `4xx`
+                - Then return a `StarletteResponse` from target server
+            If the establish websocket connection successfully:
                 - Will run forever until the connection is closed. Then return False.
         """
         base_url = self.base_url

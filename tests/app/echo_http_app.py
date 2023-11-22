@@ -144,3 +144,7 @@ def get_app() -> AppDataclass4Test:
         return 0
 
     return test_app_dataclass
+
+
+# for cmd test
+app = get_app().app

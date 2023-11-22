@@ -1,6 +1,6 @@
 """Utils for registering proxy to fastapi router.
 
-The low-level API for `fastapi_proxy_lib.fastapi.app`.
+The low-level API for [fastapi_proxy_lib.fastapi.app][].
 """
 
 import asyncio
@@ -47,7 +47,7 @@ def _http_register_router(
     Args:
         proxy: http proxy to bind.
         router: fastapi router to bind.
-        **kwargs: The kwargs to pass to router endpoint(e.g `router.get()`).
+        **kwargs: The kwargs to pass to router endpoint(e.g `@router.get()`).
 
     Returns:
         None. Just do binding proxy to router.
@@ -87,7 +87,7 @@ def _ws_register_router(
     Args:
         proxy: websocket proxy to bind.
         router: fastapi router to bind.
-        **kwargs: The kwargs to pass to router endpoint(e.g `router.websocket()`).
+        **kwargs: The kwargs to pass to router endpoint(e.g `@router.websocket()`).
 
     Returns:
         None. Just do binding proxy to router.
@@ -105,14 +105,52 @@ def _ws_register_router(
             path: The path parameters of request.
 
         Returns:
-            If the establish websocket connection failed, return a JSONResponse.
-            If the establish websocket connection success, will run forever until the connection is closed. Then return False.
+            If the establish websocket connection unsuccessfully:
+                - Will call `websocket.close()` to send code `4xx`
+                - Then return a `StarletteResponse` from target server
+            If the establish websocket connection successfully:
+                - Will run forever until the connection is closed. Then return False.
         """
         return await proxy.proxy(websocket=websocket, path=path)
 
 
 class RouterHelper:
-    """Helper class to register proxy to fastapi router."""
+    """Helper class to register proxy to fastapi router.
+
+    Examples:
+        ```python
+        from fastapi import APIRouter, FastAPI
+        from fastapi_proxy_lib.core.http import ReverseHttpProxy
+        from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
+        from fastapi_proxy_lib.fastapi.router import RouterHelper
+
+        reverse_http_proxy = ReverseHttpProxy(base_url="https://www.example.com/")
+        reverse_ws_proxy = ReverseWebSocketProxy(base_url="ws://echo.websocket.events/")
+
+        helper = RouterHelper()
+
+        reverse_http_router = helper.register_router(
+            reverse_http_proxy,
+            APIRouter(),  # (1)!
+        )
+        reverse_ws_router = helper.register_router(reverse_ws_proxy)  # (2)!
+
+        app = FastAPI(lifespan=helper.get_lifespan())  # (3)!
+
+        app.include_router(reverse_http_router, prefix="/http")  # (4)!
+        app.include_router(reverse_ws_router, prefix="/ws")
+        ```
+
+        1. You can pass any arguments to [`APIRouter()`][fastapi.APIRouter] if you want.
+        2. Or, with default values, `RouterHelper` will create a new router for you.
+        3. The benefit of using `RouterHelper` is that you can get `lifespan` for closing proxy easily.
+        4. Also, router give you the ability to set prefix for proxy endpoint.
+
+    Abstract: Benefits of using `RouterHelper`.
+        - Easily get the `lifespan` for close all proxies using `helper.get_lifespan()`.
+        - `RouterHelper` automatically registers all HTTP methods (e.g., GET, POST) for you.
+            It also registers WebSocket endpoint if you pass in a WebSocket proxy class.
+    """
 
     def __init__(self) -> None:
         """Initialize RouterHelper."""
@@ -160,13 +198,15 @@ class RouterHelper:
                 If None, will create a new router.
                 Usually, you don't need to set the argument, unless you want set some arguments to router.
                 Note: the same router can only be registered once.
-            **endpoint_kwargs: The kwargs to pass to router endpoint(e.g `router.get()`).
+            **endpoint_kwargs: The kwargs which is passed to router endpoint, e.g.
+                - [`@router.get(**endpoint_kwargs)`][fastapi.APIRouter.get]
+                - [`@router.websocket(**endpoint_kwargs)`][fastapi.APIRouter.websocket]
 
         Raises:
-            TypeError: If pass a unknown proxy type.
+            TypeError: If pass a unknown type of `proxy` arg.
 
         Returns:
-            A fastapi router, which proxy endpoint has been registered on root route: '/'.
+            A [fastapi router][fastapi.APIRouter], which proxy endpoint has been registered on root route: `'/'`.
         """
         router = APIRouter() if router is None else router
 
@@ -202,7 +242,8 @@ class RouterHelper:
         """The lifespan event for closing registered proxy.
 
         Returns:
-            asynccontextmanager for closing registered proxy.
+            asynccontextmanager for closing registered proxy,
+                refer to [lifespan](https://fastapi.tiangolo.com/advanced/events/#lifespan)
         """
 
         @asynccontextmanager

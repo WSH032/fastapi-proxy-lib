@@ -96,3 +96,7 @@ def get_app() -> AppDataclass4Test:  # noqa: C901, PLR0915
         await websocket.accept()
 
     return test_app_dataclass
+
+
+# for cmd test
+app = get_app().app

@@ -53,13 +53,16 @@ class ProxyFilterProto(Protocol):
     def __call__(self, url: httpx.URL, /) -> Union[None, str]:
         """Decide whether accept the proxy request by the given url.
 
+        Examples:
+            Refer to [`default_proxy_filter`][fastapi_proxy_lib.core._tool.default_proxy_filter]
+
         Args:
-            url: The target url of the client request proxy.
+            url: The target url of the client request to proxy.
 
         Returns:
-            If None, should accept the proxy request.
-            If (str), should rejetc the proxy request.
-                - The (str) is the reason of reject.
+            None: should accept the proxy request.
+            str: should rejetc the proxy request.
+                The `str` is the reason of reject.
         """
 
 
@@ -361,16 +364,18 @@ def check_http_version(
 def default_proxy_filter(url: httpx.URL) -> Union[None, str]:
     """Filter by host.
 
-    If the host of url is ip address, and is not global ip address, will reject it.
-    Time consumption: 3.22~4.7 µs ± 42.6 ns.
+    If the host of url is ip address, which is not global ip address, then will reject it.
+
+    Warning:
+        It will consumption time: 3.22~4.7 µs ± 42.6 ns.
 
     Args:
-        url: The target url of the client request proxy.
+        url: The target url of the client request to proxy.
 
     Returns:
-        If None, should accept the proxy request.
-        If (str), should rejetc the proxy request.
-            - The str is the reason of reject.
+        None: should accept the proxy request.
+        str: should rejetc the proxy request.
+            The `str` is the reason of reject.
     """
     try:
         ip_address = ipaddress.ip_address(url.host)
