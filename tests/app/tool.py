@@ -82,7 +82,7 @@ class UvicornServer(uvicorn.Server):
     _contx_socket: Union[socket.socket, None]
     assert not hasattr(uvicorn.Server, "_contx_socket")
 
-    _contx_server_started_event: asyncio.Event
+    _contx_server_started_event: Union[asyncio.Event, None]
     assert not hasattr(uvicorn.Server, "_contx_server_started_event")
 
     contx_exit_timeout: Union[int, float, None]
@@ -96,22 +96,22 @@ class UvicornServer(uvicorn.Server):
         super().__init__(config=config)
         self._contx_server_task = None
         self._contx_socket = None
-        self._contx_server_started_event = asyncio.Event()
+        self._contx_server_started_event = None
         self.contx_exit_timeout = contx_exit_timeout
 
     @override
     async def startup(self, sockets: Optional[List[socket.socket]] = None) -> None:
         """The same as `uvicorn.Server.startup`."""
         super_return = await super().startup(sockets=sockets)
-        self._contx_server_started_event.set()
+        self.contx_server_started_event.set()
         return super_return
 
     @_no_override_uvicorn_server
     async def aenter(self) -> Self:
         """Launch the server."""
         # 在分配资源之前，先检查是否重入
-        if self._contx_server_started_event.is_set():
-            raise RuntimeError("DO not launch server with __aenter__ statement again!")
+        if self.contx_server_started_event.is_set():
+            raise RuntimeError("DO not launch server by __aenter__ again!")
 
         # FIXME: # 这个socket被设计为可被同一进程内的多个server共享，可能会引起潜在问题
         self._contx_socket = self.config.bind_socket()
@@ -120,8 +120,8 @@ class UvicornServer(uvicorn.Server):
             self.serve([self._contx_socket]), name=f"Uvicorn Server Task of {self}"
         )
         # 在 uvicorn.Server 的实现中，Server.serve() 内部会调用 Server.startup() 完成启动
-        # 被覆盖的 self.startup() 会在完成时调用 self._contx_server_started_event.set()
-        await self._contx_server_started_event.wait()  # 等待服务器确实启动后才返回
+        # 被覆盖的 self.startup() 会在完成时调用 self.contx_server_started_event.set()
+        await self.contx_server_started_event.wait()  # 等待服务器确实启动后才返回
         return self
 
     @_no_override_uvicorn_server
@@ -165,6 +165,24 @@ class UvicornServer(uvicorn.Server):
         The same as `self.aexit()`.
         """
         return await self.aexit()
+
+    @property
+    @_no_override_uvicorn_server
+    def contx_server_started_event(self) -> asyncio.Event:
+        """The event that indicates the server has started.
+
+        When first call the property, it will instantiate a `asyncio.Event()`to
+        `self._contx_server_started_event`.
+
+        Warn: This is a internal implementation detail, do not change the event manually.
+            - please call the property in `self.aenter()` or `self.startup()` **first**.
+            - **Never** call it outside of an async event loop first:
+                https://stackoverflow.com/questions/53724665/using-queues-results-in-asyncio-exception-got-future-future-pending-attached
+        """
+        if self._contx_server_started_event is None:
+            self._contx_server_started_event = asyncio.Event()
+
+        return self._contx_server_started_event
 
     @property
     @_no_override_uvicorn_server
