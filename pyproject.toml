@@ -77,7 +77,8 @@ dependencies = [
 
 [tool.hatch.envs.default.scripts]
 # https://pytest-cov.readthedocs.io/en/latest/config.html
-test = "pytest tests/ --cov-report=html --cov"
+# xml for codecov, html for local review
+test = "pytest tests/ --cov --cov-report=xml --cov-report=html"
 # ruff must before black
 lint = ["- ruff --fix .", "- black .", "- pyright .", "- codespell . -i 3 -w"]
 lint-check = [
