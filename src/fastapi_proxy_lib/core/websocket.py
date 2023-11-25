@@ -461,7 +461,7 @@ class BaseWebSocketProxy(BaseProxyModel):
         """Http proxy base class.
 
         Args:
-            client: The `httpx.AsyncClient` to send http requests. Defaults to None.
+            client: The `httpx.AsyncClient` to establish websocket connection. Defaults to None.<br>
                 If None, will create a new `httpx.AsyncClient`,
                 else will use the given `httpx.AsyncClient`.
             follow_redirects: Whether follow redirects of target server. Defaults to False.
@@ -696,33 +696,35 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
         It only affects the HTTP handshake before establishing the WebSocket,
         and regular WebSocket messages will be forwarded correctly.
 
-    Examples:
-        ```python
-        from contextlib import asynccontextmanager
-        from typing import AsyncIterator
+    # # Examples
 
-        from fastapi import FastAPI, WebSocket
-        from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
-        from httpx import AsyncClient
+    ```python
+    from contextlib import asynccontextmanager
+    from typing import AsyncIterator
 
-        proxy = ReverseWebSocketProxy(AsyncClient(), base_url="ws://echo.websocket.events/")
+    from fastapi import FastAPI
+    from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
+    from httpx import AsyncClient
+    from starlette.websockets import WebSocket
 
-        @asynccontextmanager
-        async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
-            """Close proxy."""
-            yield
-            await proxy.aclose()
+    proxy = ReverseWebSocketProxy(AsyncClient(), base_url="ws://echo.websocket.events/")
 
-        app = FastAPI(lifespan=close_proxy_event)
+    @asynccontextmanager
+    async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
+        """Close proxy."""
+        yield
+        await proxy.aclose()
 
-        @app.websocket_route("/{path:path}")
-        async def _(websocket: WebSocket, path: str = ""):
-            return await proxy.proxy(websocket=websocket, path=path)
+    app = FastAPI(lifespan=close_proxy_event)
 
-        # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
-        # visit the app: `ws://127.0.0.1:8000/`
-        # you can establish websocket connection with `ws://echo.websocket.events`
-        ```
+    @app.websocket_route("/{path:path}")
+    async def _(websocket: WebSocket, path: str = ""):
+        return await proxy.proxy(websocket=websocket, path=path)
+
+    # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
+    # visit the app: `ws://127.0.0.1:8000/`
+    # you can establish websocket connection with `ws://echo.websocket.events`
+    ```
     '''
 
     client: httpx.AsyncClient
@@ -757,8 +759,8 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
 
         Args:
             base_url: The target proxy server url.
-            client: The `httpx.AsyncClient` to establish websocket connection. Defaults to None.
-                if None, will create a new `httpx.AsyncClient`,
+            client: The `httpx.AsyncClient` to establish websocket connection. Defaults to None.<br>
+                If None, will create a new `httpx.AsyncClient`,
                 else will use the given `httpx.AsyncClient`.
             follow_redirects: Whether follow redirects of target server. Defaults to False.
 
@@ -788,8 +790,8 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
 
         Args:
             websocket: The client websocket requests.
-            path: The path params of websocket request, which means the path params of base url.
-                If None, will get it from `websocket.path_params`.
+            path: The path params of websocket request, which means the path params of base url.<br>
+                If None, will get it from `websocket.path_params`.<br>
                 **Usually, you don't need to pass this argument**.
 
         Returns:

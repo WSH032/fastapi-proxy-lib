@@ -307,33 +307,44 @@ class ReverseHttpProxy(BaseHttpProxy):
         follow_redirects: Whether follow redirects of target server.
         base_url: The target server url.
 
-    Examples:
-        ```python
-        from contextlib import asynccontextmanager
-        from typing import AsyncIterator
+    # # Examples
 
-        from fastapi import FastAPI, Request
-        from fastapi_proxy_lib.core.http import ReverseHttpProxy
-        from httpx import AsyncClient
+    ```python
+    from contextlib import asynccontextmanager
+    from typing import AsyncIterator
 
-        proxy = ReverseHttpProxy(AsyncClient(), base_url="https://www.example.com/")
+    from fastapi import FastAPI
+    from fastapi_proxy_lib.core.http import ReverseHttpProxy
+    from httpx import AsyncClient
+    from starlette.requests import Request
 
-        @asynccontextmanager
-        async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
-            """Close proxy."""
-            yield
-            await proxy.aclose()
+    proxy = ReverseHttpProxy(AsyncClient(), base_url="http://www.example.com/")
 
-        app = FastAPI(lifespan=close_proxy_event)
+    @asynccontextmanager
+    async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:  # (1)!
+        """Close proxy."""
+        yield
+        await proxy.aclose()
 
-        @app.get("/{path:path}")
-        async def _(request: Request, path: str = ""):
-            return await proxy.proxy(request=request, path=path)
+    app = FastAPI(lifespan=close_proxy_event)
 
-        # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
-        # visit the app: `http://127.0.0.1:8000/`
-        # you will get the response from `https://www.example.com/`
-        ```
+    @app.get("/{path:path}")  # (2)!
+    async def _(request: Request, path: str = ""):
+        return await proxy.proxy(request=request, path=path)  # (3)!
+
+    # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
+    # visit the app: `http://127.0.0.1:8000/`
+    # you will get the response from `http://www.example.com/`
+    ```
+
+    1. lifespan please refer to [starlette/lifespan](https://www.starlette.io/lifespan/)
+    2. `{path:path}` is the key.<br>
+        It allows the app to accept all path parameters.<br>
+        visit <https://www.starlette.io/routing/#path-parameters> for more info.
+    3. !!! info
+        In fact, you only need to pass the `request: Request` argument.<br>
+        `fastapi_proxy_lib` can automatically get the `path` from `request`.<br>
+        Explicitly pointing it out here is just to remind you not to forget to specify `{path:path}`.
     '''
 
     client: httpx.AsyncClient
@@ -356,8 +367,8 @@ class ReverseHttpProxy(BaseHttpProxy):
             So, we will return 502 status_code whatever the error is.
 
         Args:
-            client: The `httpx.AsyncClient` to send http requests. Defaults to None.
-                if None, will create a new `httpx.AsyncClient`,
+            client: The `httpx.AsyncClient` to send http requests. Defaults to None.<br>
+                If None, will create a new `httpx.AsyncClient`,
                 else will use the given `httpx.AsyncClient`.
             follow_redirects: Whether follow redirects of target server. Defaults to False.
             base_url: The target proxy server url.
@@ -373,8 +384,8 @@ class ReverseHttpProxy(BaseHttpProxy):
 
         Args:
             request: `starlette.requests.Request`
-            path: The path params of request, which means the path params of base url.
-                If None, will get it from `request.path_params`.
+            path: The path params of request, which means the path params of base url.<br>
+                If None, will get it from `request.path_params`.<br>
                 **Usually, you don't need to pass this argument**.
 
         Returns:
@@ -430,34 +441,36 @@ class ForwardHttpProxy(BaseHttpProxy):
         follow_redirects: Whether follow redirects of target server.
         proxy_filter: Callable Filter, decide whether reject the proxy requests.
 
-    Examples:
-        ```python
-        from contextlib import asynccontextmanager
-        from typing import AsyncIterator
+    # # Examples
 
-        from fastapi import FastAPI, Request
-        from fastapi_proxy_lib.core.http import ForwardHttpProxy
-        from fastapi_proxy_lib.core.tool import default_proxy_filter
-        from httpx import AsyncClient
+    ```python
+    from contextlib import asynccontextmanager
+    from typing import AsyncIterator
 
-        proxy = ForwardHttpProxy(AsyncClient(), proxy_filter=default_proxy_filter)
+    from fastapi import FastAPI
+    from fastapi_proxy_lib.core.http import ForwardHttpProxy
+    from fastapi_proxy_lib.core.tool import default_proxy_filter
+    from httpx import AsyncClient
+    from starlette.requests import Request
 
-        @asynccontextmanager
-        async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
-            """Close proxy."""
-            yield
-            await proxy.aclose()
+    proxy = ForwardHttpProxy(AsyncClient(), proxy_filter=default_proxy_filter)
 
-        app = FastAPI(lifespan=close_proxy_event)
+    @asynccontextmanager
+    async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
+        """Close proxy."""
+        yield
+        await proxy.aclose()
 
-        @app.get("/{path:path}")
-        async def _(request: Request, path: str = ""):
-            return await proxy.proxy(request=request, path=path)
+    app = FastAPI(lifespan=close_proxy_event)
 
-        # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
-        # visit the app: `http://127.0.0.1:8000/https://www.example.com`
-        # you will get the response from `https://www.example.com`
-        ```
+    @app.get("/{path:path}")
+    async def _(request: Request, path: str = ""):
+        return await proxy.proxy(request=request, path=path)
+
+    # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
+    # visit the app: `http://127.0.0.1:8000/http://www.example.com`
+    # you will get the response from `http://www.example.com`
+    ```
     '''
 
     client: httpx.AsyncClient
@@ -475,7 +488,7 @@ class ForwardHttpProxy(BaseHttpProxy):
         """Forward http proxy.
 
         Args:
-            client: The `httpx.AsyncClient` to send http requests. Defaults to None.
+            client: The `httpx.AsyncClient` to send http requests. Defaults to None.<br>
                 If None, will create a new `httpx.AsyncClient`,
                 else will use the given `httpx.AsyncClient`.
             follow_redirects: Whether follow redirects of target server. Defaults to False.
@@ -497,8 +510,8 @@ class ForwardHttpProxy(BaseHttpProxy):
 
         Args:
             request: `starlette.requests.Request`
-            path: The path params of request, which means the full url of target server.
-                If None, will get it from `request.path_params`.
+            path: The path params of request, which means the full url of target server.<br>
+                If None, will get it from `request.path_params`.<br>
                 **Usually, you don't need to pass this argument**.
 
         Returns:
