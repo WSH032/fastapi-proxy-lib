@@ -40,15 +40,22 @@ classifiers = [
 
 dynamic = ["version"]
 
-dependencies = ["httpx", "httpx-ws", "starlette", "typing_extensions>=4.5.0"]
+dependencies = [
+    "httpx < 1.0.0",                     # TODO: Once it releases version 1.0.0, we will remove this restriction.
+    "httpx-ws == 0.4.2",                 # NOTE: We use private module of it, so we need to fix the version.
+    "starlette < 1.0.0",                 # TODO: Once it releases version 1.0.0, we will remove this restriction.
+    "typing_extensions >=4.5.0, <5.0.0",
+]
+
+[project.optional-dependencies]
+standard = [
+    "fastapi < 1.0.0", # TODO: Once it releases version 1.0.0, we will remove this restriction.
+]
+all = ["fastapi-proxy-lib[standard]"]
 
 [project.urls]
 Documentation = "https://WSH032.github.io/fastapi-proxy-lib/"
 "Source code" = "https://github.com/WSH032/fastapi-proxy-lib"
-
-[project.optional-dependencies]
-standard = ["fastapi"]
-all = ["fastapi-proxy-lib[standard]"]
 
 
 [tool.hatch.version]
@@ -60,7 +67,7 @@ features = ["all"]
 dependencies = [
     # lint
     # The dependencies version must be consistent with the `.pre-commit-config.yaml`.
-    # # "pre-commit == 3.5.0",
+    # # "pre-commit == 3.5.0",  # install it by pipx for global, not hatch for local
     "black == 23.10.0",
     "pyright == 1.1.332", # pyright must be installed in the runtime environment
     "ruff == 0.1.1",
@@ -68,9 +75,9 @@ dependencies = [
     # test
     "pytest == 7.*",
     "pytest-cov ==  4.*",
-    "uvicorn[standard] == 0.23.2",
-    "httpx[http2]",
-    "anyio",                       # for pytest async test, we don't set version here, because fastapi has a dependency on it
+    "uvicorn[standard] < 1.0.0", # TODO: Once it releases version 1.0.0, we will remove this restriction.
+    "httpx[http2]",              # we don't set version here, instead set it in `[project].dependencies`.
+    "anyio",                     # we don't set version here, because fastapi has a dependency on it
     "asgi-lifespan==2.*",
     "pytest-timeout==2.*",
 ]
