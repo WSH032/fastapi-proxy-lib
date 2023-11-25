@@ -117,39 +117,55 @@ def _ws_register_router(
 class RouterHelper:
     """Helper class to register proxy to fastapi router.
 
-    Examples:
-        ```python
-        from fastapi import APIRouter, FastAPI
-        from fastapi_proxy_lib.core.http import ReverseHttpProxy
-        from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
-        from fastapi_proxy_lib.fastapi.router import RouterHelper
+    # # Examples
 
-        reverse_http_proxy = ReverseHttpProxy(base_url="https://www.example.com/")
-        reverse_ws_proxy = ReverseWebSocketProxy(base_url="ws://echo.websocket.events/")
+    ```python
+    from fastapi import APIRouter, FastAPI
+    from fastapi_proxy_lib.core.http import ForwardHttpProxy, ReverseHttpProxy
+    from fastapi_proxy_lib.core.tool import default_proxy_filter
+    from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
+    from fastapi_proxy_lib.fastapi.router import RouterHelper
 
-        helper = RouterHelper()
+    reverse_http_proxy = ReverseHttpProxy(base_url="http://www.example.com/")
+    reverse_ws_proxy = ReverseWebSocketProxy(base_url="ws://echo.websocket.events/")
+    forward_http_proxy = ForwardHttpProxy(proxy_filter=default_proxy_filter)
 
-        reverse_http_router = helper.register_router(
-            reverse_http_proxy,
-            APIRouter(),  # (1)!
-        )
-        reverse_ws_router = helper.register_router(reverse_ws_proxy)  # (2)!
+    helper = RouterHelper()
 
-        app = FastAPI(lifespan=helper.get_lifespan())  # (3)!
+    reverse_http_router = helper.register_router(
+        reverse_http_proxy,
+        APIRouter(prefix="/reverse"),  # (1)!
+    )
+    forward_http_router = helper.register_router(
+        forward_http_proxy,
+        APIRouter(prefix="/forward"),
+    )
+    reverse_ws_router = helper.register_router(reverse_ws_proxy)  # (2)!
 
-        app.include_router(reverse_http_router, prefix="/http")  # (4)!
-        app.include_router(reverse_ws_router, prefix="/ws")
-        ```
+    app = FastAPI(lifespan=helper.get_lifespan())  # (3)!
 
-        1. You can pass any arguments to [`APIRouter()`][fastapi.APIRouter] if you want.
-        2. Or, with default values, `RouterHelper` will create a new router for you.
-        3. The benefit of using `RouterHelper` is that you can get `lifespan` for closing proxy easily.
-        4. Also, router give you the ability to set prefix for proxy endpoint.
+    app.include_router(reverse_http_router, prefix="/http")  # (4)!
+    app.include_router(forward_http_router, prefix="/http")
+    app.include_router(reverse_ws_router, prefix="/ws")
 
-    Abstract: Benefits of using `RouterHelper`.
-        - Easily get the `lifespan` for close all proxies using `helper.get_lifespan()`.
-        - `RouterHelper` automatically registers all HTTP methods (e.g., GET, POST) for you.
+    # reverse http proxy on "/http/reverse"
+    # forward http proxy on "/http/forward"
+    # reverse websocket proxy on "/ws"
+    ```
+
+    1. You can pass any arguments to [`APIRouter()`][fastapi.APIRouter] if you want.
+    2. Or, with default values, `RouterHelper` will create a new router for you.
+    3. Registering a lifespan event to close all proxies is a recommended action.
+    4. You can use the proxy router just like a normal `APIRouter`.
+
+    Info:
+        Technically, [fastapi_proxy_lib.fastapi.app][] does the same thing,
+        including automatically registering lifespan events.
+
+    Abstract: Compared to using the proxy base-class directly, the advantages of using `RouterHelper` are:
+        - `RouterHelper` automatically registers all HTTP methods (e.g. `GET`, `POST`, etc.) for you.
             It also registers WebSocket endpoint if you pass in a WebSocket proxy class.
+        - Conveniently get the `lifespan` for close all proxies by using `helper.get_lifespan()`.
     """
 
     def __init__(self) -> None:
@@ -193,12 +209,11 @@ class RouterHelper:
         """Register proxy to router.
 
         Args:
-            proxy: The http/websocket proxy to register.
-            router: The fastapi router to register.
-                If None, will create a new router.
-                Usually, you don't need to set the argument, unless you want set some arguments to router.
-                Note: the same router can only be registered once.
-            **endpoint_kwargs: The kwargs which is passed to router endpoint, e.g.
+            proxy: The `http`/`websocket` proxy to register.
+            router: The fastapi router to register. If None, will create a new router.<br>
+                Usually, you don't need to set the argument, unless you want set some arguments to router.<br>
+                **Note: the same router can only be registered once**.
+            **endpoint_kwargs: The kwargs which is passed to router endpoint, e.g:
                 - [`@router.get(**endpoint_kwargs)`][fastapi.APIRouter.get]
                 - [`@router.websocket(**endpoint_kwargs)`][fastapi.APIRouter.websocket]
 

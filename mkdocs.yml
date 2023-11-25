@@ -24,7 +24,7 @@ theme:
     - content.action.view
     - content.tabs.link
     - content.tooltips
-    # - navigation.top
+    - navigation.top
     # - navigation.expand
     # - navigation.tracking
   # https://squidfunk.github.io/mkdocs-material/setup/changing-the-colors/#system-preference
@@ -124,6 +124,8 @@ extra:
 
 watch:
   - src/fastapi_proxy_lib
+  - README.md
+  - CONTRIBUTING.md
 
 validation:
   omitted_files: warn
@@ -134,4 +136,9 @@ validation:
 # It's used in scripts/gen_ref_pages.py
 nav:
   - Home: index.md
+  - Usage:
+    - Usage/index.md
+    - Usage/FastAPI-Helper.md
+    - Usage/Advanced-and-Starlette.md
+    - Usage/Security.md
   - API Reference: reference/
