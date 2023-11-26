@@ -12,8 +12,8 @@ if find_spec("fastapi") is None:  # pragma: no cover  # 无法测试
     msg: str = dedent(
         """\
         `fastapi` is not installed.
-        `fastapi_proxy.app` module requires installing `fastapi` first:
-            pip install fastapi-proxy[standard]
+        `fastapi_proxy_lib.fastapi` module requires installing `fastapi` first:
+            pip install fastapi-proxy-lib[standard]
         """
     )
     raise RuntimeError(msg)
