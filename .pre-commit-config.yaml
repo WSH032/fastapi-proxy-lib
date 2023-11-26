@@ -48,4 +48,5 @@ repos:
     hooks:
       - id: commitlint
         stages: [commit-msg]
-        additional_dependencies: ["@commitlint/config-angular"]
+        # NOTE: the dependencies must consistent with `commitlint.config.js`
+        additional_dependencies: ["@commitlint/config-conventional"]
