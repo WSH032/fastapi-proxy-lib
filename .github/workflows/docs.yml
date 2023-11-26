@@ -1,7 +1,9 @@
 # copy from: https://github.com/frankie567/httpx-ws/blob/main/.github/workflows/docs.yml
 
-name: Deploy documentation
+# WARNING: Do not change the name of this file, keep `docs.yml`.
+# markdown badges are hard-coded to point to this file.
 
+name: Deploy documentation
 
 # Since document updates may be frequent,
 # we do not run tests when deploying documents,

@@ -1,9 +1,10 @@
 # refer to: https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
 
-name: Publish Python 🐍 distribution 📦 to PyPI and TestPyPI
+# WARNING: Do not change the name of this file, keep `publish.yml`.
+# "trusted publishing" will check the name of the workflow file.
 
-# NOTE: We do not restrict branches here,
-# instead restrict branches in the `environment` - `pypi`.
+name: Publish Python 🐍 distribution 📦 to PyPI
+
 on:
   push:
     tags:

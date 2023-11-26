@@ -1,7 +1,7 @@
 # WARNING: Do not change the name of this file, keep `lint-test.yml`.
+# `workflow_call` needs the name of the workflow file to work.
 
 name: Lint check and test
-
 
 # We only automatically run checks for PRs.
 # It is best to avoid direct commits to the main branch, instead make a PR for checks.
@@ -11,7 +11,6 @@ on:
   workflow_dispatch:
   # NOTE: set `secrets: inherit` when call this workflow from other workflow.
   workflow_call:
-
 
 jobs:
   lint-check:
@@ -63,3 +62,16 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
           fail_ci_if_error: true
+
+  # https://github.com/marketplace/actions/alls-green#why
+  lint-test-all-green: # This job does nothing and is only used for the branch protection
+    if: always() # IMPORTANT: mandatory
+    needs:
+      - lint-check
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
