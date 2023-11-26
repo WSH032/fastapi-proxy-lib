@@ -1,7 +1,11 @@
 # copy from: https://github.com/frankie567/httpx-ws/blob/main/.github/workflows/docs.yml
 
-name: Build documentation
+name: Deploy documentation
 
+
+# Since document updates may be frequent,
+# we do not run tests when deploying documents,
+# instead test during the PR stage.
 on:
   push:
     branches:
@@ -19,7 +23,7 @@ defaults:
     shell: bash
 
 jobs:
-  build:
+  build-docs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,8 +45,8 @@ jobs:
         with:
           path: ./site
 
-  deploy:
-    needs: build
+  deploy-docs:
+    needs: build-docs
     # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
     permissions:
       pages: write # to deploy to Pages

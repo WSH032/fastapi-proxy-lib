@@ -1,11 +1,17 @@
+# WARNING: Do not change the name of this file, keep `lint-test.yml`.
+
 name: Lint check and test
 
+
+# We only automatically run checks for PRs.
+# It is best to avoid direct commits to the main branch, instead make a PR for checks.
+# For the pushes to the main branch, the checks is done by `publish.yml` when publish.
 on:
-  push:
-    branches: ["main"]
   pull_request:
-    branches: ["main"]
   workflow_dispatch:
+  # NOTE: set `secrets: inherit` when call this workflow from other workflow.
+  workflow_call:
+
 
 jobs:
   lint-check:
