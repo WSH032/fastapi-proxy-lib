@@ -76,8 +76,8 @@ dependencies = [
     #   NOTE: 👇
     #   The versions of `black`, `ruff`, `codespell`,  must be consistent with the `.pre-commit-config.yaml`.
     #   Don't edit them manually, use `pre-commit run ver_sync` instead.
-    "black==23.10.0",
-    "ruff==0.1.1",
+    "black==23.11.0",
+    "ruff==0.1.6",
     "codespell==2.2.6",
     #   Don't write comments on these lines, because they will be removed by `pre-commit run ver_sync`.
     #   NOTE: 👆
