@@ -25,22 +25,18 @@ repos:
     rev: v0.1.1
     hooks:
       - id: ruff
+        alias: ruff # NOTE: don't change this alias, it's used in `ver_sync.py`, keep consistent with `pyproject.toml`
         args: [--fix, --exit-non-zero-on-fix]
   - repo: https://github.com/psf/black-pre-commit-mirror
     rev: 23.10.0
     hooks:
       - id: black
-  # # pyright will be performed by `hatch run lint`
-  # # because pyright requires a actual testing environment with all dependencies installed
-  # - repo: https://github.com/RobertCraigie/pyright-python
-  #   rev: v1.1.332
-  #   hooks:
-  #     - id: pyright
-  #       args: [-p, ".pre-commit-pyrightconfig.json"] # ignore `reportMissingImports`
+        alias: black # NOTE: don't change this alias, it's used in `ver_sync.py`, keep consistent with `pyproject.toml`
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.6
     hooks:
       - id: codespell
+        alias: codespell # NOTE: don't change this alias, it's used in `ver_sync.py`, keep consistent with `pyproject.toml`
         additional_dependencies:
           - tomli
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
@@ -50,3 +46,14 @@ repos:
         stages: [commit-msg]
         # NOTE: the dependencies must consistent with `commitlint.config.js`
         additional_dependencies: ["@commitlint/config-conventional"]
+  - repo: local
+    hooks:
+      - id: ver_sync
+        stages: [pre-commit]
+        name: synchronize versions of lint tools
+        entry: python scripts/pre_commit_scripts/ver_sync.py
+        language: python
+        additional_dependencies:
+          - tomlkit == 0.12.* # TODO: Once it releases version 1.0.0, we will remove this restriction.
+          - ruamel.yaml == 0.18.* # TODO: Once it releases version 1.0.0, we will remove this restriction.
+          - packaging == 23.*

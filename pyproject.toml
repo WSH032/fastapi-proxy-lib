@@ -5,7 +5,6 @@ build-backend = "hatchling.build"
 # https://hatch.pypa.io/latest/config/metadata/
 [project]
 name = "fastapi-proxy-lib"
-# the lowest required python version should be added to `.pre-commit-pyrightconfig.json`
 requires-python = ">=3.8"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -74,13 +73,17 @@ tag_name = "v{new_version}"
 path = ".venv" # for vscode auto selecting python interpreter
 features = ["all"]
 dependencies = [
-    # lint
-    # The dependencies version must be consistent with the `.pre-commit-config.yaml`.
-    # # "pre-commit == 3.5.0",  # install it by pipx for global, not hatch for local
-    "black == 23.10.0",
+    #   NOTE: 👇
+    #   The versions of `black`, `ruff`, `codespell`,  must be consistent with the `.pre-commit-config.yaml`.
+    #   Don't edit them manually, use `pre-commit run ver_sync` instead.
+    "black==23.10.0",
+    "ruff==0.1.1",
+    "codespell==2.2.6",
+    #   Don't write comments on these lines, because they will be removed by `pre-commit run ver_sync`.
+    #   NOTE: 👆
+
+    # lint-check
     "pyright == 1.1.332", # pyright must be installed in the runtime environment
-    "ruff == 0.1.1",
-    "codespell == 2.2.6",
     # test
     "pytest == 7.*",
     "pytest-cov ==  4.*",
@@ -217,7 +220,8 @@ exclude_also = [
     "raise NotImplementedError",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
-    "@(typing_extensions\\.)?deprecated", # deprecated code will not be tested
+    # # deprecated code will not be tested
+    "@(typing_extensions\\.)?deprecated",
     # `overload` just for type hint, will not be tested
     "@(typing_extensions\\.)?overload",
     "@(typing\\.)?overload",
