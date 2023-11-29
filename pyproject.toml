@@ -11,9 +11,11 @@ license = { file = "LICENSE" }
 authors = [
     { name = "Sean Wang", email = "126865849+WSH032@users.noreply.github.com" },
 ]
-description = "HTTP/WebSocket asgi proxy."
+description = "HTTP/WebSocket proxy for starlette/FastAPI."
 keywords = [
     "proxy",
+    "reverse-proxy",
+    "forward-proxy",
     "http",
     "websocket",
     "asgi",
@@ -33,23 +35,28 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
     "Topic :: Internet :: WWW/HTTP :: Session",
+    "Environment :: Web Environment",
     "Framework :: AsyncIO",
+    "Framework :: FastAPI",
+    "Typing :: Typed",
 ]
 
 dynamic = ["version"]
 
+# NOTE: version constraints
+# https://iscinumpy.dev/post/bound-version-constraints/
+
 dependencies = [
-    "httpx < 1.0.0",                     # TODO: Once it releases version 1.0.0, we will remove this restriction.
-    "httpx-ws == 0.4.2",                 # NOTE: We use private module of it, so we need to fix the version.
-    "starlette < 1.0.0",                 # TODO: Once it releases version 1.0.0, we will remove this restriction.
-    "typing_extensions >=4.5.0, <5.0.0",
+    "httpx",
+    "httpx-ws >= 0.4.2",
+    "starlette",
+    "typing_extensions >=4.5.0",
 ]
 
 [project.optional-dependencies]
-standard = [
-    "fastapi < 1.0.0", # TODO: Once it releases version 1.0.0, we will remove this restriction.
-]
+standard = ["fastapi"]
 all = ["fastapi-proxy-lib[standard]"]
 
 [project.urls]
@@ -71,7 +78,7 @@ tag_name = "v{new_version}"
 
 [tool.hatch.envs.default]
 path = ".venv" # for vscode auto selecting python interpreter
-features = ["all"]
+features = ["standard"] # NOTE: Don't use Self-referential
 dependencies = [
     #   NOTE: 👇
     #   The versions of `black`, `ruff`, `codespell`,  must be consistent with the `.pre-commit-config.yaml`.
@@ -83,7 +90,7 @@ dependencies = [
     #   NOTE: 👆
 
     # lint-check
-    "pyright == 1.1.332", # pyright must be installed in the runtime environment
+    "pyright == 1.1.338", # pyright must be installed in the runtime environment
     # test
     "pytest == 7.*",
     "pytest-cov ==  4.*",
@@ -115,10 +122,10 @@ path = ".venv-docs"
 detached = true
 dependencies = [
     "mkdocs-material == 9.*",
-    "mkdocstrings[python] == 0.24.0",
-    "mkdocs-gen-files == 0.5.0",
-    "mkdocs-literate-nav == 0.6.1",
-    "mkdocs-section-index == 0.3.8",
+    "mkdocstrings[python] == 0.24.*",
+    "mkdocs-gen-files == 0.5.*",
+    "mkdocs-literate-nav == 0.6.*",
+    "mkdocs-section-index == 0.3.*",
     "mkdocs-git-revision-date-localized-plugin == 1.*",
     "mkdocs-git-committers-plugin-2 == 2.*",
 ]
