@@ -205,6 +205,41 @@ class TestReverseHttpProxy(AbstractTestProxy):
         assert r.status_code == 502
         check_if_err_resp_is_from_px_serv(r)
 
+    @pytest.mark.anyio()
+    async def test_cookie_leakage(
+        self,
+        tool_4_test_fixture: Tool4TestFixture,
+    ) -> None:
+        """Testing for fixing cookie leakage vulnerabilities."""
+        client_for_conn_to_proxy_server = (
+            tool_4_test_fixture.client_for_conn_to_proxy_server
+        )
+        proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
+
+        # request to set cookie: foo=bar
+        await client_for_conn_to_proxy_server.get(
+            proxy_server_base_url + "get/cookies/set/foo/bar"
+        )
+        # check if cookie is set
+        assert client_for_conn_to_proxy_server.cookies["foo"] == "bar"
+        r = await client_for_conn_to_proxy_server.get(
+            proxy_server_base_url + "get/cookies"
+        )
+        assert r.json()["foo"] == "bar"
+
+        # Then simulate the access of another user's client by clearing cookiejar
+        client_for_conn_to_proxy_server.cookies.clear()
+        # check if cookiejar is cleared
+        assert not client_for_conn_to_proxy_server.cookies
+
+        # check if cookie is not leaked
+        r = await client_for_conn_to_proxy_server.get(
+            proxy_server_base_url + "get/cookies",
+            cookies={"a": "b"},
+        )
+        assert "foo" not in r.json()  # not leaked
+        assert r.json()["a"] == "b"  # send cookies normally
+
 
 class TestForwardHttpProxy(AbstractTestProxy):
     """For testing forward http proxy."""

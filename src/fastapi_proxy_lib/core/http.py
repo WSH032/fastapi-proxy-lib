@@ -29,6 +29,7 @@ from ._model import BaseProxyModel
 from ._tool import (
     ProxyFilterProto,
     _RejectedProxyRequestError,  # pyright: ignore [reportPrivateUsage]  # 允许使用本项目内部的私有成员
+    change_necessary_client_header_for_httpx,
     check_base_url,
     check_http_version,
     return_err_msg_response,
@@ -121,9 +122,12 @@ def _change_client_header(
 ) -> _ConnectionHeaderParseResult:
     """Change client request headers for sending to proxy server.
 
+    - Change "host" header to `target_url.netloc.decode("ascii")`.
+    - If "Cookie" header is not in headers,
+        will forcibly add a empty "Cookie" header
+        to avoid httpx.AsyncClient automatically add another user cookiejar.
     - Will remove "close" value in "connection" header, and add "keep-alive" value to it.
     - And remove "keep-alive" header.
-    - And change "host" header to `target_url.netloc.decode("ascii")`.
 
     Args:
         headers: original client request headers.
@@ -135,9 +139,12 @@ def _change_client_header(
             new_headers: New requests headers, the **copy** of original input headers.
     """
     # https://www.starlette.io/requests/#headers
-    # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#syntax
-    new_headers = headers.mutablecopy()
 
+    new_headers = change_necessary_client_header_for_httpx(
+        headers=headers, target_url=target_url
+    )
+
+    # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#syntax
     # NOTE: http标准中规定，connecttion头字段的值用于指示逐段头，而标头是大小写不敏感的，故认为可以转为小写处理
     client_connection_header = [
         v.strip() for v in new_headers.get("connection", "").lower().split(",")
@@ -159,10 +166,6 @@ def _change_client_header(
     # 移除"keep-alive"字段
     if "keep-alive" in new_headers:
         del new_headers["keep-alive"]
-
-    # 将host字段更新为目标url的host
-    # TODO: 如果查看httpx.URL源码，就会发现netloc是被字符串编码成bytes的，能否想个办法直接获取字符串来提高性能?
-    new_headers["host"] = target_url.netloc.decode("ascii")
 
     return _ConnectionHeaderParseResult(whether_require_close, new_headers)
 
@@ -250,6 +253,12 @@ class BaseHttpProxy(BaseProxyModel):
         request_content = (
             None if request.method in _NON_REQUEST_BODY_METHODS else request.stream()
         )
+
+        # FIX: https://github.com/WSH032/fastapi-proxy-lib/security/advisories/GHSA-7vwr-g6pm-9hc8
+        # time cost: 396 ns ± 3.39 ns
+        # 由于这不是原子性的操作，所以不保证一定阻止cookie泄漏
+        # 一定能保证修复的方法是通过`_tool.change_necessary_client_header_for_httpx`强制指定优先级最高的cookie头
+        client.cookies.clear()
 
         # NOTE: 不要在这里catch `client.build_request` 和 `client.send` 的异常，因为通常来说
         # - 反向代理的异常需要报 5xx 错误
