@@ -1,55 +1,183 @@
-# Hi 感谢对本项目感兴趣
+<!-- The content will be also use in `docs/CONTRIBUTING/CONTRIBUTING.md` by `pymdownx.snippets` -->
+<!-- Do not use any **relative link** and  **GitHub-specific syntax** ！-->
+<!-- Do not rename or move the file -->
 
-## 代码贡献
+# Contributing
 
-> **Note**
->
-> 我们最低支持的版本是`python3.8`，你可以随意使用`python3.8`以上的版本。
->
-> 但是请注意，您的代码要能通过`py >= 3.8`的所有版本的代码风格检查与测试。
+> The guide is modified from [mkdocstrings](https://mkdocstrings.github.io/contributing/#contributing)
 
-我们推荐使用[虚拟环境](https://docs.python.org/3/library/venv.html#creating-virtual-environments)来进行开发
+Contributions are welcome, and they are greatly appreciated! Every little bit helps, and credit will always be given.
 
-在激活虚拟环境后，运行[./scripts/init.sh](./scripts/init-dev.sh)来为你初始化:
+## Environment setup
 
-- [requirements](./requirements-dev.txt)
-- [hatch](https://github.com/pypa/hatch)
-- [pre-commit](https://pre-commit.com/)
-- [mkdocs-material](https://squidfunk.github.io/mkdocs-material/)
+First, `fork` and `clone` the repository, then `cd` to the directory.
 
-## 代码风格
+We use [`hatch`](https://github.com/pypa/hatch) and [`pre-commit`](https://pre-commit.com/) to manage our project.
 
-由于本项目主要是python语言，所以我们只强制要求python代码风格。
+You can install them with:
 
-但是涉及到其他语言（例如 `bash`, `toml` 等）的部分，也请尽力保证样式正确。
+```shell
+# https://pypa.github.io/pipx/
+python3 -m pip install --user pipx
 
-> **Note**
-> 我们启用了大量而严格的`lint`规则，如果你使用`vscode`，我们推荐你安装[./.vscode/extensions.json](./.vscode/extensions.json)中的插件来帮助你实时检查错误
->
-> 如果你打不过检查器，可以使用`# noqa`和`# type: ignore`来跳过检查
->
-> 当然，这些规则可能过于严格，你可以发起一个`issue`或者`pull request`来讨论是否需要修改规则
+pipx install hatch
+pipx install pre-commit
+```
 
-### python代码风格(请查看[./pyproject.toml](./pyproject.toml)了解我们的风格)
+Then, initialize the env with:
 
-- [Ruff](https://github.com/astral-sh/ruff): 代码质量检查
-- [Blcak](https://github.com/psf/black): 代码格式规范
-- [Pyright](https://github.com/Microsoft/pyright/): 静态类型检查
+```shell
+# Init pre-commit
+# https://pre-commit.com/#3-install-the-git-hook-scripts
+pre-commit install
+pre-commit run --all-files
 
-您需要通过以上检查，`pre-commit` 会确保这点。
+# https://hatch.pypa.io/latest/environment/
+hatch shell
+```
 
-你也可以[手动检查](./scripts/lint.sh)和[自动修复](./scripts/format.sh)。
+That's all! Now, you can start to develop.
 
-> **Note**
-> `Pyright`检查将发生两次
->
-> - 在`pre-commit`中，`Pyright`不会检查第三方依赖，并且`python`版本为支持的最低版本
-> - 而在`Github Actions`或[手动检查](./scripts/lint.sh)中，`Pyright`将在激活的虚拟环境中检查所有依赖
+## Code style
 
-## 代码测试
+The source code is in `src/`
 
-测试文件位于[./tests/](./tests/)
+We use [Ruff](https://github.com/astral-sh/ruff), [Blcak](https://github.com/psf/black), [Pyright](https://github.com/Microsoft/pyright/)
+ and [Codespell](https://github.com/codespell-project/codespell) to check our code style and lint.
 
-我们使用`pytest`来完成测试，测试将在`Github Actions`中进行。
+Please check `pyproject.toml` to know our style.
 
-你也可以[手动测试](./scripts/pytest.sh)。
+If you want to format or lint-fix your code, you can use the following command:
+
+```shell
+hatch run lint
+```
+
+or, with `pre-commit`:
+
+```shell
+pre-commit run -a
+```
+
+or, dry run:
+
+```shell
+hatch run lint-check
+```
+
+!!! tip
+    If you use `VSCode`, we strongly recommend you to install the extensions in `.vscode/extensions.json`.<br>
+    Because our code style rules are quite strict.<br>
+    These extensions can help you know where need to be fixed when coding.
+
+## Testing
+
+We use [pytest](https://docs.pytest.org/en/stable/) to test our code.
+
+The test source code is in `tests/`
+
+You can run the testing with:
+
+```shell
+hatch run test
+```
+
+## Documentation
+
+We use [mkdocs](https://www.mkdocs.org), [mkdocs-material](https://squidfunk.github.io/mkdocs-material), [mkdocstrings](https://mkdocstrings.github.io) to build our documentation.
+
+The documentation source code is in `docs/`, `mkdocs.yml`,
+ may be there is also some source code in `scripts/` or somewhere (check `mkdocs.yml` to find that).
+
+Live-reloading docs:
+
+```shell
+hatch run docs:mkdocs serve
+```
+
+Build docs:
+
+```shell
+hatch run docs:docs-build
+```
+
+## PR
+
+- PRs should target the `main` branch.
+- Keep branches up to date by `rebase` before merging.
+- Do not add multiple unrelated things in same PR.
+- Do not submit PRs where you just take existing lines and reformat them without changing what they do.
+- Do not change other parts of the code that are not yours for formatting reasons.
+- Do not use your clone's main branch to make a PR - create a branch and PR that.
+
+### Edit `CHANGELOG.md`
+
+If you have made the corresponding changes, please record them in `CHANGELOG.md`.
+
+### Commit message convention
+
+Commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/),
+or, `pre-commit` may be reject your commit.
+
+!!! info
+    If you don't know how to finish these, it's okay, feel free to initiate a PR, I will help you continue.
+
+## More
+
+There may still be some useful commands in `pyproject.toml`, you can refer to [hatch/environment/scripts](https://hatch.pypa.io/latest/config/environment/overview/#scripts) to use them.
+
+!!! info
+    If you find that the commands given in the above examples are incorrect, please open an issue, we greatly appreciate it.
+
+---
+
+## 😢
+
+!!! warning
+    The following 👇 content is for the maintainers of this project, may be you don't need to read it.
+
+---
+
+## deploy-docs
+
+please refer to `.github/workflows/docs.yml`
+
+## CI: lint-test
+
+please refer to `.github/workflows/lint-test.yml`
+
+## CI: pre-commit-ci auto-update
+
+Every Monday, `pre-commit-ci` will send a PR for automatic hook version updates, which will trigger a local `ver_sync` hook.
+
+The `ver_sync` hook will maintain lint tools version consistency between `.pre-commit-config.yaml` and `pyproject.toml`.
+
+Please check whether the `ver_sync` works properly, then you can accept the PR.
+
+## Publish and Release 🚀
+
+**^^First, edit `CHANGELOG.md` to record the changes.^^**
+
+Then, please refer to:
+
+- `.github/workflows/publish.yml`
+- <https://github.com/frankie567/hatch-regex-commit>
+- <https://hatch.pypa.io/latest/version/#updating>
+
+Update version with:
+
+```shell
+hatch version {new_version}
+```
+
+It will create a commit and tag automatically, then, push the **tag** to GitHub.
+
+After that, the `publish.yml` workflow will build and publish the package to PyPI.
+
+> Don't forget to make a `approve` in environment `pypi` for the workflow.
+
+Finally, edit the `draft release` created by `publish.yml` workflow, and publish the release.
+
+!!! warning
+    The creating of tag needs signature verification,<br>
+    please refer to <https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification>

@@ -1,15 +1,19 @@
+<!-- The content will be also use in `docs/index.md` by `pymdownx.snippets` -->
+<!-- Do not use any **relative link** and  **GitHub-specific syntax** ！-->
+<!-- Do not rename or move the file -->
+
 # FastAPI Proxy Lib
 
 <p align="center">
     <em>HTTP/WebSocket proxy for starlette/FastAPI</em>
 </p>
 
-|         |                                                                                                                                                     |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CI/CD   | [![CI: lint-test]][CI: lint-test#link] [![CI: docs]][CI: docs#link]                                                                                 |
+| | |
+| - | - |
+| CI/CD   | [![CI: lint-test]][CI: lint-test#link] [![pre-commit.ci status]][pre-commit.ci status#link] <br> [![CI: docs]][CI: docs#link] [![CI: publish]][CI: publish#link]  |
 | Code    | [![codecov]][codecov#link] [![Code style: black]][Code style: black#link] [![Ruff]][Ruff#link] [![Checked with pyright]][Checked with pyright#link] |
-| Package | [![Python-Version]][Python-Version#link]                                                                                                            |
-| Meta    | [![Hatch project]][Hatch project#link] [![GitHub License]][GitHub License#link]                                                                     |
+| Package | [![PyPI - Version]][PyPI#link] [![PyPI - Downloads]][PyPI#link] [![PyPI - Python Version]][PyPI#link] |
+| Meta    | [![Hatch project]][Hatch project#link] [![GitHub License]][GitHub License#link] |
 
 ---
 
@@ -48,13 +52,12 @@ So, it perfectly supports all features of [httpx.AsyncClient](https://www.python
 > !!! note
 >
 >     We follow semantic versioning.<br>
->     This is a young project, and before 1.0.0, there may be changes in the API (though we try to avoid that).<br>
->     We recommend pinning to any minor versions, such as 0.1.x.
-
-Pypi will come soon, please install from github temporarily:
+>     This is a young project, and before 1.0.0, there may be changes in the API (we try to avoid that).<br>
+>     We will release security updates at any time, please try to keep the version updated, instead of pinning to the old version.<br>
+>     pin to `major version` is recommended.
 
 ```shell
-pip install fastapi-proxy-lib[standard]@git+https://github.com/WSH032/fastapi-proxy-lib.git
+pip install fastapi-proxy-lib
 ```
 
 Perhaps you've noticed that we're installing `fastapi-proxy-lib[standard]` instead of `fastapi-proxy-lib`. The difference is:
@@ -82,18 +85,22 @@ uvicorn main:app  --host 127.0.0.1 --port 8000
 
 Then, visit `http://127.0.0.1:8000/bar?baz=1`, you will get the response from `http://www.example.com/foo/bar?baz=1`.
 
-For support with `FastAPI router` or only using `Starlette`, please **visit to our [documentation 📚](https://wsh032.github.io/fastapi-proxy-lib/) for more details**.
+**[Continue, please visit to our documentation 📚 for more details](https://wsh032.github.io/fastapi-proxy-lib/)**:
+
+- support for `FastAPI router`
+- only `Starlette` dependency
+- `WebSocket` proxy
 
 ## development
 
 - If you find any issues, please don't hesitate to [open an issue](https://github.com/WSH032/fastapi-proxy-lib/issues).
 - If you need assistance, feel free to [start a discussion](https://github.com/WSH032/fastapi-proxy-lib/discussions).
-- [Welcome PR](https://github.com/WSH032/fastapi-proxy-lib/pulls)
+- Follow our `CONTRIBUTING.md`, [PR Welcome!](https://github.com/WSH032/fastapi-proxy-lib/pulls)
+- Security 😰❗: We value any security vulnerabilities, [please report to us privately](https://github.com/WSH032/fastapi-proxy-lib/security), pretty appreciated for that.
 
 English is not the native language of the author (me), so if you find any areas for improvement in the documentation, your feedback is welcome.
 
-If you think this project helpful, consider giving it a star ![GitHub Repo stars](https://img.shields.io/github/stars/wsh032/fastapi-proxy-lib?style=social)
- , which makes me happy. :smile:
+If you think this project helpful, consider giving it a star ![GitHub Repo stars](https://img.shields.io/github/stars/wsh032/fastapi-proxy-lib?style=social), which makes me happy. :smile:
 
 ## License
 
@@ -101,12 +108,16 @@ This project is licensed under the terms of the *Apache License 2.0*.
 
 <!-- link -->
 
+<!-- ci/cd -->
 [CI: lint-test]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/lint-test.yml/badge.svg?branch=main
 [CI: lint-test#link]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/lint-test.yml
 [CI: docs]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/docs.yml/badge.svg?branch=main
 [CI: docs#link]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/docs.yml
-[Python-Version]: https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FWSH032%2Ffastapi-proxy%2Fmain%2Fpyproject.toml&logo=python&logoColor=gold&label=Python
-[Python-Version#link]: https://github.com/WSH032/fastapi-proxy-lib/blob/main/pyproject.toml
+[CI: publish]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/publish.yml/badge.svg?branch=main
+[CI: publish#link]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/publish.yml
+[pre-commit.ci status]: https://results.pre-commit.ci/badge/github/WSH032/fastapi-proxy-lib/main.svg
+[pre-commit.ci status#link]: https://results.pre-commit.ci/latest/github/WSH032/fastapi-proxy-lib/main
+<!-- code -->
 [Code style: black]: https://img.shields.io/badge/code%20style-black-000000.svg
 [Code style: black#link]: https://github.com/psf/black
 [GitHub License]: https://img.shields.io/github/license/WSH032/fastapi-proxy-lib?color=9400d3
@@ -115,6 +126,12 @@ This project is licensed under the terms of the *Apache License 2.0*.
 [Ruff#link]: https://github.com/astral-sh/ruff
 [Checked with pyright]: https://microsoft.github.io/pyright/img/pyright_badge.svg
 [Checked with pyright#link]: https://microsoft.github.io/pyright
+<!-- package -->
+[PyPI - Version]: https://img.shields.io/pypi/v/fastapi-proxy-lib?logo=pypi&label=PyPI&logoColor=gold
+[PyPI - Downloads]: https://img.shields.io/pypi/dm/fastapi-proxy-lib?color=blue&label=Downloads&logo=pypi&logoColor=gold
+[PyPI - Python Version]: https://img.shields.io/pypi/pyversions/fastapi-proxy-lib?logo=python&label=Python&logoColor=gold
+[PyPI#link]: https://pypi.org/project/fastapi-proxy-lib
+<!-- meta -->
 [Hatch project]: https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg
 [Hatch project#link]: https://github.com/pypa/hatch
 [codecov]: https://codecov.io/gh/WSH032/fastapi-proxy-lib/graph/badge.svg?token=62QQU06E8X

@@ -10,6 +10,9 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  icon:
+    logo: octicons/rocket-24
+  favicon: images/rocket-24.svg
   features:
     - content.code.copy
     - content.code.annotate
@@ -126,6 +129,7 @@ watch:
   - src/fastapi_proxy_lib
   - README.md
   - CONTRIBUTING.md
+  - CHANGELOG.md
 
 validation:
   omitted_files: warn
@@ -142,3 +146,7 @@ nav:
     - Usage/Advanced-and-Starlette.md
     - Usage/Security.md
   - API Reference: reference/
+  - CONTRIBUTING:
+    - CONTRIBUTING/CONTRIBUTING.md
+  - CHANGELOG:
+    - CHANGELOG/CHANGELOG.md
