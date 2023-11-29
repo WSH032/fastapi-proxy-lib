@@ -19,6 +19,12 @@ from typing import (
 import httpx
 from starlette import status
 from starlette.background import BackgroundTask as BackgroundTask_t
+from starlette.datastructures import (
+    Headers as StarletteHeaders,
+)
+from starlette.datastructures import (
+    MutableHeaders as StarletteMutableHeaders,
+)
 from starlette.responses import JSONResponse
 from starlette.types import Scope
 from typing_extensions import deprecated, overload
@@ -424,3 +430,37 @@ def warn_for_none_filter(
         return default_proxy_filter
     else:
         return proxy_filter
+
+
+def change_necessary_client_header_for_httpx(
+    *, headers: StarletteHeaders, target_url: httpx.URL
+) -> StarletteMutableHeaders:
+    """Change client request headers for sending to proxy server.
+
+    - Change "host" header to `target_url.netloc.decode("ascii")`.
+    - If "Cookie" header is not in headers,
+        will forcibly add a empty "Cookie" header
+        to avoid httpx.AsyncClient automatically add another user cookiejar.
+
+    Args:
+        headers: original client request headers.
+        target_url: httpx.URL of target server url.
+
+    Returns:
+        New requests headers, the copy of original input headers.
+    """
+    # https://www.starlette.io/requests/#headers
+    new_headers = headers.mutablecopy()
+
+    # 将host字段更新为目标url的host
+    # TODO: 如果查看httpx.URL源码，就会发现netloc是被字符串编码成bytes的，能否想个办法直接获取字符串来提高性能?
+    new_headers["host"] = target_url.netloc.decode("ascii")
+
+    # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/Cookie
+
+    # FIX: https://github.com/WSH032/fastapi-proxy-lib/security/advisories/GHSA-7vwr-g6pm-9hc8
+    # forcibly set `Cookie` header to avoid httpx.AsyncClient automatically add another user cookiejar
+    if "Cookie" not in new_headers:  # case-insensitive
+        new_headers["Cookie"] = ""
+
+    return new_headers

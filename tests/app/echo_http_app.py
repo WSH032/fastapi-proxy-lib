@@ -12,7 +12,7 @@ from .tool import AppDataclass4Test, RequestDict
 DEFAULT_FILE_NAME = "echo.txt"
 
 
-def get_app() -> AppDataclass4Test:
+def get_app() -> AppDataclass4Test:  # noqa: C901
     """Get the echo http app.
 
     Returns:
@@ -82,6 +82,28 @@ def get_app() -> AppDataclass4Test:
             "query_params": request.query_params,
         }
         return msg
+
+    @app.get("/get/cookies")
+    async def cookies(
+        request: Request,
+    ) -> Mapping[str, str]:
+        """Returns cookie of request."""
+        nonlocal test_app_dataclass
+        test_app_dataclass.request_dict["request"] = request
+        return request.cookies
+
+    @app.get("/get/cookies/set/{key}/{value}")
+    async def cookies_set(
+        request: Request,
+        key: str,
+        value: str,
+    ) -> Response:
+        """Returns a response which requires client to set cookie: `key=value`."""
+        nonlocal test_app_dataclass
+        test_app_dataclass.request_dict["request"] = request
+        response = Response()
+        response.set_cookie(key=key, value=value)
+        return response
 
     @app.post("/post/echo_body")
     async def echo_body(request: Request) -> Response:

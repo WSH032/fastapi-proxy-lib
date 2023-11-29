@@ -24,12 +24,6 @@ from httpx_ws._api import (  # HACK: 注意，这个是私有模块
     DEFAULT_QUEUE_SIZE,
 )
 from starlette import status as starlette_status
-from starlette.datastructures import (
-    Headers as StarletteHeaders,
-)
-from starlette.datastructures import (
-    MutableHeaders as StarletteMutableHeaders,
-)
 from starlette.exceptions import WebSocketException as StarletteWebSocketException
 from starlette.responses import Response as StarletteResponse
 from starlette.responses import StreamingResponse
@@ -40,6 +34,7 @@ from wsproto.events import TextMessage as WsprotoTextMessage
 
 from ._model import BaseProxyModel
 from ._tool import (
+    change_necessary_client_header_for_httpx,
     check_base_url,
     check_http_version,
 )
@@ -82,29 +77,7 @@ SUPPORTED_WS_HTTP_VERSIONS = ("1.1",)
 #################### Tools function ####################
 
 
-def _change_client_header(
-    *, headers: StarletteHeaders, target_url: httpx.URL
-) -> StarletteMutableHeaders:
-    """Change client request headers for sending to proxy server.
-
-    - Change "host" header to `target_url.netloc.decode("ascii")`.
-
-    Args:
-        headers: original client request headers.
-        target_url: httpx.URL of target server url.
-
-    Returns:
-        New requests headers, the copy of original input headers.
-    """
-    # https://www.starlette.io/requests/#headers
-    # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#syntax
-    new_headers = headers.mutablecopy()
-
-    # 将host字段更新为目标url的host
-    # TODO: 如果查看httpx.URL源码，就会发现netloc是被字符串编码成bytes的，能否想个办法直接获取字符串来提高性能?
-    new_headers["host"] = target_url.netloc.decode("ascii")
-
-    return new_headers
+_change_client_header = change_necessary_client_header_for_httpx
 
 
 def _get_client_request_subprotocols(ws_scope: Scope) -> Union[List[str], None]:
@@ -540,6 +513,12 @@ class BaseWebSocketProxy(BaseProxyModel):
         # https://docs.python.org/3.12/library/contextlib.html?highlight=asyncexitstack#catching-exceptions-from-enter-methods
         stack = AsyncExitStack()
         try:
+            # FIX: https://github.com/WSH032/fastapi-proxy-lib/security/advisories/GHSA-7vwr-g6pm-9hc8
+            # time cost: 396 ns ± 3.39 ns
+            # 由于这不是原子性的操作，所以不保证一定阻止cookie泄漏
+            # 一定能保证修复的方法是通过`_tool.change_necessary_client_header_for_httpx`强制指定优先级最高的cookie头
+            client.cookies.clear()
+
             proxy_ws = await stack.enter_async_context(
                 httpx_ws.aconnect_ws(
                     # 这个是httpx_ws类型注解的问题，其实是可以使用httpx.URL的
