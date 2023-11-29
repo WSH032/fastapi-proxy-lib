@@ -63,8 +63,8 @@ source = "regex_commit"
 commit_extra_args = ["-e"]
 path = "src/fastapi_proxy_lib/__init__.py"
 # NOTE: `chore` is required by commitlint
-commit_message = "chore(version): 🚀 bump version {current_version} → {new_version}"
-tag_message = "🚀 bump version {current_version} → {new_version}"
+commit_message = "chore(version): 🚀 bump version v{current_version} → v{new_version}"
+tag_message = "🚀 bump version v{current_version} → v{new_version}"
 # NOTE: `v` prefix is required by github `publish.yml` action
 tag_name = "v{new_version}"
 

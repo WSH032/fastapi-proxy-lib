@@ -14,12 +14,12 @@ If you do not explicitly specify it, `ForwardHttpProxy` will issue a warning and
 - If you want to accept all proxy requests (**never do this on a public server**), you can do it like this:
 
     ```python
-    proxy_filter = lambda _: None
+    proxy_filter = lambda *_: None
     ```
 
 - If you want to implement your own proxy filter, please refer to the [fastapi_proxy_lib.core.tool.ProxyFilterProto][].
 
-## `http` vs `https`
+## `http`/`ws` vs `https`/`wss`
 
 !!! danger
     **Never use a server with the HTTPS protocol to proxy a target server (`base_url`) with the HTTP protocol !**
