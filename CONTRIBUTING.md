@@ -172,9 +172,15 @@ hatch version {new_version}
 
 It will create a commit and tag automatically, then, push the **tag** to GitHub.
 
-After that, the `publish.yml` workflow will build and publish the package to PyPI.
+!!! warning
+    You should tag in another branch, then rebase it to `main` branch **in local**.<br>
+    **DO NOT rebase with tag in GitHub**, refer to <https://docs.github.com/zh/authentication/managing-commit-signature-verification/about-commit-signature-verification#signature-verification-for-rebase-and-merge>
 
-> Don't forget to make a `approve` in environment `pypi` for the workflow.
+Check if everything is ok, for example, **check if the tag is on the `main` branch**.
+
+If so, make a `approve` in environment `pypi` for the workflow.
+
+After that, the `publish.yml` workflow will build and publish the package to PyPI.
 
 Finally, edit the `draft release` created by `publish.yml` workflow, and publish the release.
 

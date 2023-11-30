@@ -31,6 +31,7 @@ Source Code: <https://github.com/WSH032/fastapi-proxy-lib/>
     - [x] Supports all HTTP methods (`GET`, `POST`, etc.)
 - [x] Support both **reverse** proxy and **forward** proxy.
 - [x] **Transparently** and **losslessly** handle all proxy requests,
+    Including **HTTP headers**, **cookies**, **query parameters**, **body**, etc.
 - [x] Asynchronous streaming transfer, support **file proxy**.
 
 ### other features
@@ -39,6 +40,8 @@ Source Code: <https://github.com/WSH032/fastapi-proxy-lib/>
 - [x] **100%** [Type Completeness](https://microsoft.github.io/pyright/#/typed-libraries?id=type-completeness), [Code coverage of **over 95%**][codecov#link].
 - [x] Forced keep-alive connections, minimizing proxy latency.
 - [x] Handle errors as gracefully as possible.
+    - `fastapi-proxy-lib` has a well-designed mechanism behind the scenes to handle exceptional websocket disconnections for you.
+    - `fastapi-proxy-lib` will exit as gracefully as possible.
 
 ### `FastAPI Proxy Lib` stands on the shoulders of giants
 
@@ -47,6 +50,8 @@ Source Code: <https://github.com/WSH032/fastapi-proxy-lib/>
 
 So, it perfectly supports all features of [httpx.AsyncClient](https://www.python-httpx.org/advanced/#client-instances), you can even use your custom `AsyncClient`, [`Transport`](https://www.python-httpx.org/advanced/#custom-transports).
 
+> except `cookies` and `base_url` arguments, which are taken over by `fastapi-proxy-lib`
+
 ## Installation
 
 > !!! note
@@ -54,7 +59,8 @@ So, it perfectly supports all features of [httpx.AsyncClient](https://www.python
 >     We follow semantic versioning.<br>
 >     This is a young project, and before 1.0.0, there may be changes in the API (we try to avoid that).<br>
 >     We will release security updates at any time, please try to keep the version updated, instead of pinning to the old version.<br>
->     pin to `major version` is recommended.
+>     pin to `major version` is recommended.<br>
+>     visit our `CHANGELOG.md` for more info.
 
 ```shell
 pip install fastapi-proxy-lib

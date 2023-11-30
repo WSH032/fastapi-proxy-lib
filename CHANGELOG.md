@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#10](https://github.com/WSH032/fastapi-proxy-lib/pull/10) - fix security vulnerabilities of cookies leakage between different users. Thanks [@WSH032](https://github.com/WSH032)!
 
+### Removed
+
+- [#10](https://github.com/WSH032/fastapi-proxy-lib/pull/10) - Remove support for setting cookies at the `AsyncClient` level. Thanks [@WSH032](https://github.com/WSH032)!
+
 ## [0.0.1b0] - 2023-11-27 [YANKED]
 
 !!! danger
