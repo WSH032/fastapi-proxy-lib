@@ -15,13 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Removed` for now removed features.
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
+- `[YANKED]` for deprecated releases.
 
 <!-- Refer to: https://github.com/olivierlacan/keep-a-changelog/blob/main/CHANGELOG.md -->
 <!-- Refer to: https://github.com/gradio-app/gradio/blob/main/CHANGELOG.md -->
 
 ## [Unreleased]
 
-None.
+### Security
+
+- [#10](https://github.com/WSH032/fastapi-proxy-lib/pull/10) - fix security vulnerabilities of cookies leakage between different users. Thanks [@WSH032](https://github.com/WSH032)!
 
 ## [0.0.1b0] - 2023-11-27 [YANKED]
 

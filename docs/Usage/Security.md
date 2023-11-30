@@ -51,3 +51,25 @@ For this situation, the browser's same-origin protection policy will fail,
 and cookies from `http://www.example.com/` will be sent to` http://www.google.com/`.
 
 You should inform the user of this situation and let them decide whether to continue.
+
+---
+
+## What did `fastapi-proxy-lib` do to protect your Security? 🔐
+
+!!! info
+    The following content is the security measures taken by `fastapi-proxy-lib` behind the scenes.
+    You may not need to read these for using this library.
+
+### Forbid the merging of cookies at the AsyncClient level
+
+For fix security vulnerabilities of cookies leakage between different users:
+
+- Before sending each proxy request, `fastapi-proxy-lib` will clear `AsyncClient.cookies` to avoid recording cookies from different users.
+- To prevent `AsyncClient` merge cookie, `fastapi-proxy-lib` will forcibly add an empty cookie string `""` to each proxy request that does not contain a cookie field header.
+
+Through these, `fastapi-proxy-lib` hopes to prevent the mergence and sharing of cookies from different users.
+
+More info, please visit [Security Advisories `GHSA-7vwr-g6pm-9hc8`](https://github.com/WSH032/fastapi-proxy-lib/security/advisories/GHSA-7vwr-g6pm-9hc8) and [#10](https://github.com/WSH032/fastapi-proxy-lib/pull/10).
+
+!!! note
+    It will **not affect** the normal sending and receiving of cookies.
