@@ -74,6 +74,7 @@ commit_message = "chore(version): 🚀 bump version v{current_version} → v{new
 tag_message = "🚀 bump version v{current_version} → v{new_version}"
 # NOTE: `v` prefix is required by github `publish.yml` action
 tag_name = "v{new_version}"
+check_dirty = false
 
 
 [tool.hatch.envs.default]

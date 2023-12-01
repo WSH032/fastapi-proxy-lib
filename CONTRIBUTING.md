@@ -156,7 +156,7 @@ Please check whether the `ver_sync` works properly, then you can accept the PR.
 
 ## Publish and Release 🚀
 
-**^^First, edit `CHANGELOG.md` to record the changes.^^**
+**^^First, check-out to a new branch, edit `CHANGELOG.md` to record the changes.^^**
 
 Then, please refer to:
 
@@ -164,19 +164,29 @@ Then, please refer to:
 - <https://github.com/frankie567/hatch-regex-commit>
 - <https://hatch.pypa.io/latest/version/#updating>
 
-Update version with:
+Update version in **^^new branch^^** with:
 
 ```shell
+git add .
 hatch version {new_version}
 ```
 
-It will create a commit and tag automatically, then, push the **tag** to GitHub.
+It will create a commit and tag automatically.
+
+Then, push the **new branch** with **tag** to GitHub, and create a PR to `main` branch.
 
 !!! warning
-    You should tag in another branch, then rebase it to `main` branch **in local**.<br>
+    The `bump version` PR must have **only one commit with the corresponding tag**; otherwise, it will be rejected.
+
+Review the PR, if it's ok, **rebase** it to `main` branch **^^in local^^**
+
+!!! warning
     **DO NOT rebase with tag in GitHub**, refer to <https://docs.github.com/zh/authentication/managing-commit-signature-verification/about-commit-signature-verification#signature-verification-for-rebase-and-merge>
 
-Check if everything is ok, for example, **check if the tag is on the `main` branch**.
+Check if everything is ok, for example:
+
+- **check if the tag is on the `main` branch**.
+- check if the link in `CHANGELOG.md` is correct.
 
 If so, make a `approve` in environment `pypi` for the workflow.
 

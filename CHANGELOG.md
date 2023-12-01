@@ -35,5 +35,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 !!! danger
     **This version has security vulnerabilities, please stop using it.**
 
-[unreleased]: https://github.com/WSH032/fastapi-proxy-lib/compare/v0.0.1b0...HEAD
+[unreleased]: https://github.com/WSH032/fastapi-proxy-lib/tree/HEAD
 [0.0.1b0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.0.1b0
