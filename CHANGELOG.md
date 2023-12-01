@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2023-12-01
+
 ### Security
 
 - [#10](https://github.com/WSH032/fastapi-proxy-lib/pull/10) - fix security vulnerabilities of cookies leakage between different users. Thanks [@WSH032](https://github.com/WSH032)!
@@ -36,4 +38,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     **This version has security vulnerabilities, please stop using it.**
 
 [unreleased]: https://github.com/WSH032/fastapi-proxy-lib/tree/HEAD
+[0.1.0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.1.0
 [0.0.1b0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.0.1b0
