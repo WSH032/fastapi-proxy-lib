@@ -22,7 +22,7 @@ repos:
       - id: trailing-whitespace
   # ruff must before black
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.6
+    rev: v0.1.7
     hooks:
       - id: ruff
         alias: ruff # NOTE: don't change this alias, it's used in `ver_sync.py`, keep consistent with `pyproject.toml`
