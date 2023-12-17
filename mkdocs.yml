@@ -143,7 +143,7 @@ nav:
   - Usage:
     - Usage/index.md
     - Usage/FastAPI-Helper.md
-    - Usage/Advanced-and-Starlette.md
+    - Usage/Advanced.md
     - Usage/Security.md
   - API Reference: reference/
   - CONTRIBUTING:

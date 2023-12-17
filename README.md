@@ -33,6 +33,7 @@ Source Code: <https://github.com/WSH032/fastapi-proxy-lib/>
 - [x] **Transparently** and **losslessly** handle all proxy requests,
     Including **HTTP headers**, **cookies**, **query parameters**, **body**, etc.
 - [x] Asynchronous streaming transfer, support **file proxy**.
+- [x] `fastapi-proxy-lib` value [privacy security](https://wsh032.github.io/fastapi-proxy-lib/Usage/Security/).
 
 ### other features
 
@@ -49,6 +50,8 @@ Source Code: <https://github.com/WSH032/fastapi-proxy-lib/>
 - [httpx-ws](https://github.com/frankie567/httpx-ws) for WebSocket proxy
 
 So, it perfectly supports all features of [httpx.AsyncClient](https://www.python-httpx.org/advanced/#client-instances), you can even use your custom `AsyncClient`, [`Transport`](https://www.python-httpx.org/advanced/#custom-transports).
+
+See [Advanced Usage](https://wsh032.github.io/fastapi-proxy-lib/Usage/Advanced/) for more details.
 
 > except `cookies` and `base_url` arguments, which are taken over by `fastapi-proxy-lib`
 
