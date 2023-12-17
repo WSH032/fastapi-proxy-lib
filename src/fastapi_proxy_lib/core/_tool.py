@@ -419,11 +419,13 @@ def warn_for_none_filter(
     if proxy_filter is None:
         msg = dedent(
             """\
-            The proxy filter is None, which means no filter will be used.
-            This is not recommended, because it may cause security issues.
+            The `proxy_filter` is None, which means no filter will be used.
+            It is not recommended, because it may cause security issues.
 
             A default proxy filter will be used, which will reject the proxy request:
              - if the host of url is ip address, and is not global ip address.
+
+            More info: https://wsh032.github.io/fastapi-proxy-lib/Usage/Security/
             """
         )
         warnings.warn(msg, stacklevel=3)

@@ -1,5 +1,3 @@
-<!-- copy from: https://github.com/encode/starlette/blob/master/.github/pull_request_template.md -->
-
 <!-- Thanks for contributing 💚
 Given this is a project maintained by volunteers, please read this template to not waste your time, or ours! 😁 -->
 

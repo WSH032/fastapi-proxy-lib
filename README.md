@@ -63,7 +63,7 @@ So, it perfectly supports all features of [httpx.AsyncClient](https://www.python
 >     visit our `CHANGELOG.md` for more info.
 
 ```shell
-pip install fastapi-proxy-lib
+pip install fastapi-proxy-lib[standard]
 ```
 
 Perhaps you've noticed that we're installing `fastapi-proxy-lib[standard]` instead of `fastapi-proxy-lib`. The difference is:
@@ -108,6 +108,10 @@ English is not the native language of the author (me), so if you find any areas 
 
 If you think this project helpful, consider giving it a star ![GitHub Repo stars](https://img.shields.io/github/stars/wsh032/fastapi-proxy-lib?style=social), which makes me happy. :smile:
 
+## Refers
+
+[Can fastapi proxy another site as a response to the request?](https://github.com/tiangolo/fastapi/discussions/7382)
+
 ## License
 
 This project is licensed under the terms of the *Apache License 2.0*.
@@ -119,7 +123,7 @@ This project is licensed under the terms of the *Apache License 2.0*.
 [CI: lint-test#link]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/lint-test.yml
 [CI: docs]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/docs.yml/badge.svg?branch=main
 [CI: docs#link]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/docs.yml
-[CI: publish]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/publish.yml/badge.svg?branch=main
+[CI: publish]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/publish.yml/badge.svg
 [CI: publish#link]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/publish.yml
 [pre-commit.ci status]: https://results.pre-commit.ci/badge/github/WSH032/fastapi-proxy-lib/main.svg
 [pre-commit.ci status#link]: https://results.pre-commit.ci/latest/github/WSH032/fastapi-proxy-lib/main
