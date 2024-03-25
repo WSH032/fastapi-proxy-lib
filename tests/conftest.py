@@ -65,8 +65,7 @@ AppFactoryFixture = Callable[..., Coroutine[None, None, ASGIApp]]
 class UvicornServerFixture(Protocol):  # noqa: D101
     def __call__(  # noqa: D102
         self, config: uvicorn.Config, contx_exit_timeout: Union[int, float, None] = None
-    ) -> Coroutine[None, None, UvicornServer]:
-        ...
+    ) -> Coroutine[None, None, UvicornServer]: ...
 
 
 # https://anyio.readthedocs.io/en/stable/testing.html#specifying-the-backends-to-run-on
