@@ -368,7 +368,9 @@ server_error: {server_error}\
 """
             logging.warning(msg)
 
-    except Exception as e:  # pragma: no cover # 这个分支是一个保险分支，通常无法执行，所以只进行记录
+    except (
+        Exception
+    ) as e:  # pragma: no cover # 这个分支是一个保险分支，通常无法执行，所以只进行记录
         logging.error(
             f"{e} when close ws connection. client: {client_to_server_task}, server:{server_to_client_task}"
         )
@@ -482,9 +484,9 @@ class BaseWebSocketProxy(BaseProxyModel):
         keepalive_ping_interval_seconds = self.keepalive_ping_interval_seconds
         keepalive_ping_timeout_seconds = self.keepalive_ping_timeout_seconds
 
-        client_request_subprotocols: Union[
-            List[str], None
-        ] = _get_client_request_subprotocols(websocket.scope)
+        client_request_subprotocols: Union[List[str], None] = (
+            _get_client_request_subprotocols(websocket.scope)
+        )
 
         # httpx.stream()
         # refer to: https://www.python-httpx.org/api/#helper-functions
@@ -612,7 +614,9 @@ class BaseWebSocketProxy(BaseProxyModel):
                     task_group,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
-                for pending_task in pending:  # NOTE: pending 一般为一个未结束任务，或者为空
+                for (
+                    pending_task
+                ) in pending:  # NOTE: pending 一般为一个未结束任务，或者为空
                     # 开始取消未结束的任务
                     try:
                         await asyncio.wait_for(pending_task, timeout=1)

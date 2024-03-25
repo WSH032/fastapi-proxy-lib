@@ -170,9 +170,9 @@ class RouterHelper:
 
     def __init__(self) -> None:
         """Initialize RouterHelper."""
-        self._registered_proxy: Set[
-            Union[_HttpProxyTypes, _WebSocketProxyTypes]
-        ] = set()
+        self._registered_proxy: Set[Union[_HttpProxyTypes, _WebSocketProxyTypes]] = (
+            set()
+        )
         self._registered_router_id: Set[int] = set()
 
     @property

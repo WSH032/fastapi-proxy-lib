@@ -80,8 +80,7 @@ class LoggerProtocol(Protocol):
         *,
         msg: object,
         exc_info: Union[BaseException, None, bool],
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
 
 class ErrMsg(TypedDict):
@@ -316,9 +315,9 @@ def return_err_msg_response(
     if logger is not None:
         # 只要传入了logger，就一定记录日志
         logger(
-            msg=_msg
-            if _msg is not None
-            else err_response_json,  # 如果没有指定 _msg ，则使用content
+            msg=(
+                _msg if _msg is not None else err_response_json
+            ),  # 如果没有指定 _msg ，则使用content
             exc_info=_exc_info,
         )
     else:
@@ -395,13 +394,11 @@ def default_proxy_filter(url: httpx.URL) -> Union[None, str]:
 
 
 @overload
-def warn_for_none_filter(proxy_filter: _ProxyFilterTypeVar) -> _ProxyFilterTypeVar:
-    ...
+def warn_for_none_filter(proxy_filter: _ProxyFilterTypeVar) -> _ProxyFilterTypeVar: ...
 
 
 @overload
-def warn_for_none_filter(proxy_filter: None) -> ProxyFilterProto:
-    ...
+def warn_for_none_filter(proxy_filter: None) -> ProxyFilterProto: ...
 
 
 def warn_for_none_filter(
