@@ -332,7 +332,7 @@ def return_err_msg_response(
     return JSONResponse(
         content=err_response_json,
         status_code=status_code,
-        headers=headers,  # pyright: ignore[reportArgumentType] # 这似乎是starlette的注解错误，因为实际是只用Mapping就可以
+        headers=headers,
         background=background,
     )
 
