@@ -91,7 +91,7 @@ dependencies = [
     #   NOTE: 👆
 
     # lint-check
-    "pyright == 1.1.338", # pyright must be installed in the runtime environment
+    "pyright == 1.1.356", # pyright must be installed in the runtime environment
     # test
     "pytest == 7.*",
     "pytest-cov ==  4.*",

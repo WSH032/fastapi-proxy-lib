@@ -52,7 +52,7 @@ def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
     }
     default_kwargs.update(kwargs)
     target_ws_server = UvicornServer(
-        uvicorn.Config(**default_kwargs),  # pyright: ignore[reportGeneralTypeIssues]
+        uvicorn.Config(**default_kwargs),  # pyright: ignore[reportArgumentType]
     )
 
     async def run():

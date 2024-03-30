@@ -117,6 +117,6 @@ def test_duplicate_router_warning() -> None:
     anything_except_router = object()
     with pytest.raises(TypeError):
         helper.register_router(
-            anything_except_router,  # pyright: ignore[reportGeneralTypeIssues]
+            anything_except_router,  # pyright: ignore[reportCallIssue, reportArgumentType]
             router1,
         )

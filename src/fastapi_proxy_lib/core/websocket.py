@@ -524,7 +524,7 @@ class BaseWebSocketProxy(BaseProxyModel):
             proxy_ws = await stack.enter_async_context(
                 httpx_ws.aconnect_ws(
                     # 这个是httpx_ws类型注解的问题，其实是可以使用httpx.URL的
-                    url=target_url,  # pyright: ignore [reportGeneralTypeIssues]
+                    url=target_url,  # pyright: ignore [reportArgumentType]
                     client=client,
                     max_message_size_bytes=max_message_size_bytes,
                     queue_size=queue_size,
