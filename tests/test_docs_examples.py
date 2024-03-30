@@ -89,7 +89,7 @@ def test_reverse_ws_proxy() -> None:
 
     app = FastAPI(lifespan=close_proxy_event)
 
-    @app.websocket_route("/{path:path}")
+    @app.websocket("/{path:path}")
     async def _(websocket: WebSocket, path: str = ""):
         return await proxy.proxy(websocket=websocket, path=path)
 
