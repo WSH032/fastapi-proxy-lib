@@ -122,9 +122,9 @@ This project is licensed under the terms of the *Apache License 2.0*.
 <!-- link -->
 
 <!-- ci/cd -->
-[CI: lint-test]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/lint-test.yml/badge.svg?branch=main
+[CI: lint-test]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/lint-test.yml/badge.svg
 [CI: lint-test#link]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/lint-test.yml
-[CI: docs]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/docs.yml/badge.svg?branch=main
+[CI: docs]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/docs.yml/badge.svg
 [CI: docs#link]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/docs.yml
 [CI: publish]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/publish.yml/badge.svg
 [CI: publish#link]: https://github.com/WSH032/fastapi-proxy-lib/actions/workflows/publish.yml
