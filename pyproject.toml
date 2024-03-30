@@ -109,7 +109,7 @@ test = "pytest tests/ --cov --cov-report=xml --cov-report=html"
 # ruff must before black
 lint = ["- ruff --fix .", "- black .", "- pyright .", "- codespell . -i 3 -w"]
 lint-check = [
-    "ruff .",
+    "ruff check .",
     "black --check .",
     "pyright .",
     "pyright --verifytypes fastapi_proxy_lib --ignoreexternal",
@@ -137,7 +137,7 @@ docs-build = "mkdocs build"
 
 
 # https://docs.astral.sh/ruff/rules/
-[tool.ruff]
+[tool.ruff.lint]
 select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
@@ -192,7 +192,7 @@ ignore = [
 ]
 
 # https://docs.astral.sh/ruff/settings/#pydocstyle
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "google"
 
 # [tool.ruff.flake8-tidy-imports]
