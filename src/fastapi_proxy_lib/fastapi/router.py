@@ -3,7 +3,6 @@
 The low-level API for [fastapi_proxy_lib.fastapi.app][].
 """
 
-import asyncio
 import warnings
 from contextlib import asynccontextmanager
 from typing import (
@@ -18,6 +17,7 @@ from typing import (
     Union,
 )
 
+import anyio
 from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.responses import Response
@@ -273,6 +273,8 @@ class RouterHelper:
                 When __aexit__ is called, will close all registered proxy.
             """
             yield
-            await asyncio.gather(*[proxy.aclose() for proxy in self.registered_proxy])
+            async with anyio.create_task_group() as tg:
+                for proxy in self.registered_proxy:
+                    tg.start_soon(proxy.aclose)
 
         return shutdown_clients

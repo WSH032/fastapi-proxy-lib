@@ -309,8 +309,8 @@ def return_err_msg_response(
     err_response_json = ErrRseponseJson(detail=detail)
 
     # TODO: 请注意，logging是同步函数，每次会阻塞1ms左右，这可能会导致性能问题
-    # 特别是对于写入文件的log，最好把它放到 asyncio.to_thread 里执行
-    # https://docs.python.org/zh-cn/3/library/asyncio-task.html#coroutine
+    # 特别是对于写入文件的log，最好把它放到 `anyio.to_thread.run_sync()` 里执行
+    # https://anyio.readthedocs.io/en/stable/threads.html#running-a-function-in-a-worker-thread
 
     if logger is not None:
         # 只要传入了logger，就一定记录日志
