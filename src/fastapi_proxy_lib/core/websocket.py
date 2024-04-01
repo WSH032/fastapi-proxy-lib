@@ -1,34 +1,29 @@
 """The websocket proxy lib."""
 
-import asyncio
 import logging
+import warnings
 from contextlib import AsyncExitStack
+from textwrap import dedent
 from typing import (
     TYPE_CHECKING,
     Any,
     List,
     Literal,
-    NamedTuple,
     NoReturn,
     Optional,
     Union,
 )
 
+import anyio
 import httpx
 import httpx_ws
 import starlette.websockets as starlette_ws
-from httpx_ws._api import (  # HACK: 注意，这个是私有模块
-    DEFAULT_KEEPALIVE_PING_INTERVAL_SECONDS,
-    DEFAULT_KEEPALIVE_PING_TIMEOUT_SECONDS,
-    DEFAULT_MAX_MESSAGE_SIZE_BYTES,
-    DEFAULT_QUEUE_SIZE,
-)
+from exceptiongroup import ExceptionGroup
 from starlette import status as starlette_status
-from starlette.exceptions import WebSocketException as StarletteWebSocketException
 from starlette.responses import Response as StarletteResponse
 from starlette.responses import StreamingResponse
 from starlette.types import Scope
-from typing_extensions import TypeAlias, override
+from typing_extensions import override
 from wsproto.events import BytesMessage as WsprotoBytesMessage
 from wsproto.events import TextMessage as WsprotoTextMessage
 
@@ -38,6 +33,40 @@ from ._tool import (
     check_base_url,
     check_http_version,
 )
+
+# XXX: because these variables are private, we have to use try-except to avoid errors
+try:
+    from httpx_ws._api import (
+        DEFAULT_KEEPALIVE_PING_INTERVAL_SECONDS,
+        DEFAULT_KEEPALIVE_PING_TIMEOUT_SECONDS,
+        DEFAULT_MAX_MESSAGE_SIZE_BYTES,
+        DEFAULT_QUEUE_SIZE,
+    )
+except ImportError:
+    # ref: https://github.com/frankie567/httpx-ws/blob/b2135792141b71551b022ff0d76542a0263a890c/httpx_ws/_api.py#L31-L34
+    DEFAULT_KEEPALIVE_PING_TIMEOUT_SECONDS = (  # pyright: ignore[reportConstantRedefinition]
+        20.0
+    )
+    DEFAULT_KEEPALIVE_PING_INTERVAL_SECONDS = (  # pyright: ignore[reportConstantRedefinition]
+        20.0
+    )
+    DEFAULT_MAX_MESSAGE_SIZE_BYTES = (  # pyright: ignore[reportConstantRedefinition]
+        65_536
+    )
+    DEFAULT_QUEUE_SIZE = 512  # pyright: ignore[reportConstantRedefinition]
+
+    msg = dedent(
+        """\
+        Can not import the default httpx_ws arguments, please open an issue on:
+        https://github.com/WSH032/fastapi-proxy-lib\
+        """
+    )
+    warnings.warn(
+        msg,
+        RuntimeWarning,
+        stacklevel=1,
+    )
+
 
 __all__ = (
     "BaseWebSocketProxy",
@@ -52,16 +81,9 @@ if TYPE_CHECKING:
 #################### Data Model ####################
 
 
-_ClentToServerTaskType: TypeAlias = "asyncio.Task[starlette_ws.WebSocketDisconnect]"
-_ServerToClientTaskType: TypeAlias = "asyncio.Task[httpx_ws.WebSocketDisconnect]"
-
-
-class _ClientServerProxyTask(NamedTuple):
-    """The task group for passing websocket message between client and target server."""
-
-    client_to_server_task: _ClentToServerTaskType
-    server_to_client_task: _ServerToClientTaskType
-
+_WsExceptionGroupType = ExceptionGroup[
+    Union[starlette_ws.WebSocketDisconnect, httpx_ws.WebSocketDisconnect, Exception]
+]
 
 #################### Constant ####################
 
@@ -106,36 +128,36 @@ async def _starlette_ws_receive_bytes_or_str(
     """Receive bytes or str from starlette WebSocket.
 
     - There is already a queue inside to store the received data
-    - Even if Exception is raised, the {WebSocket} would **not** be closed automatically, you should close it manually
+    - Even if `AssertionError` is raised, the `WebSocket` would **not** be closed automatically,
+        you should close it manually,
 
     Args:
         websocket: The starlette WebSocket that has been connected.
-            "has been connected" measn that you have called "websocket.accept" first.
+            "has been connected" means that you have called "websocket.accept" first.
 
     Raises:
         starlette.websockets.WebSocketDisconnect: If the WebSocket is disconnected.
             WebSocketDisconnect.code is the close code.
             WebSocketDisconnect.reason is the close reason.
             - **This is normal behavior that you should catch**
-        StarletteWebSocketException: If receive a invalid message type which is neither bytes nor str.
-            StarletteWebSocketException.code = starlette_status.WS_1008_POLICY_VIOLATION
-            StarletteWebSocketException.reason is the close reason.
-
-        RuntimeError: If the WebSocket is not connected. Need to call "accept" first.
-            If the {websocket} argument you passed in is correct, this error will never be raised, just for asset.
+        AssertionError:
+            - If receive a invalid message type which is neither bytes nor str.
+            - RuntimeError: If the WebSocket is not connected. Need to call "accept" first.
+                If the `websocket` argument passed in is correct, this error will never be raised, just for assertion.
 
     Returns:
         bytes | str: The received data.
     """
-    # 实现参考:
+    # Implement reference:
     # https://github.com/encode/starlette/blob/657e7e7b728e13dc66cc3f77dffd00a42545e171/starlette/websockets.py#L107C1-L115C1
     assert (
         websocket.application_state == starlette_ws.WebSocketState.CONNECTED
     ), """WebSocket is not connected. Need to call "accept" first."""
 
     message = await websocket.receive()
-    # maybe raise WebSocketDisconnect
-    websocket._raise_on_disconnect(message)  # pyright: ignore [reportPrivateUsage]
+
+    if message["type"] == "websocket.disconnect":
+        raise starlette_ws.WebSocketDisconnect(message["code"], message.get("reason"))
 
     # https://asgi.readthedocs.io/en/latest/specs/www.html#receive-receive-event
     if message.get("bytes") is not None:
@@ -143,12 +165,8 @@ async def _starlette_ws_receive_bytes_or_str(
     elif message.get("text") is not None:
         return message["text"]
     else:
-        # 这种情况应该不会发生，因为这是ASGI标准
+        # It should never happen, because of the ASGI spec
         raise AssertionError("message should have 'bytes' or 'text' key")
-        raise StarletteWebSocketException(
-            code=starlette_status.WS_1008_POLICY_VIOLATION,
-            reason="Invalid message type received (neither bytes nor text).",
-        )
 
 
 # 为什么使用这个函数而不是直接使用httpx_ws_AsyncWebSocketSession.receive_text()
@@ -159,8 +177,8 @@ async def _httpx_ws_receive_bytes_or_str(
     """Receive bytes or str from httpx_ws AsyncWebSocketSession .
 
     - There is already a queue inside to store the received data
-    - Even if Exception is raised, the {WebSocket} would **not** be closed automatically, you should close it manually
-        - except for httpx_ws.WebSocketNetworkError, which will call 'close' automatically
+    - Even if `AssertionError` or `httpx_ws.WebSocketNetworkError` is raised, the `WebSocket` would **not** be closed automatically,
+        you should close it manually,
 
     Args:
         websocket: The httpx_ws AsyncWebSocketSession that has been connected.
@@ -171,9 +189,8 @@ async def _httpx_ws_receive_bytes_or_str(
             WebSocketDisconnect.reason is the close reason.
             - **This is normal behavior that you should catch**
         httpx_ws.WebSocketNetworkError: A network error occurred.
-
-        httpx_ws.WebSocketInvalidTypeReceived: If receive a invalid message type which is neither bytes nor str.
-            Usually it will never be raised, just for assert
+        AssertionError: If receive a invalid message type which is neither bytes nor str.
+            Usually it will never be raised, just for assertion
 
     Returns:
         bytes | str: The received data.
@@ -198,7 +215,7 @@ async def _httpx_ws_receive_bytes_or_str(
     else:  # pragma: no cover # 无法测试这个分支，因为无法发送这种消息，正常来说也不会被执行，所以我们这里记录critical
         msg = f"Invalid message type received: {type(event)}"
         logging.critical(msg)
-        raise httpx_ws.WebSocketInvalidTypeReceived(event)
+        raise AssertionError(event)
 
 
 async def _httpx_ws_send_bytes_or_str(
@@ -207,10 +224,10 @@ async def _httpx_ws_send_bytes_or_str(
 ) -> None:
     """Send bytes or str to WebSocket.
 
-    - Usually, when Exception is raised, the {WebSocket} is already closed.
+    - Usually, when Exception is raised, the `WebSocket` is already closed.
 
     Args:
-        websocket: The httpx_ws.AsyncWebSocketSession that has been connected.
+        websocket: The `httpx_ws.AsyncWebSocketSession` that has been connected.
         data: The data to send.
 
     Raises:
@@ -236,7 +253,7 @@ async def _starlette_ws_send_bytes_or_str(
 ) -> None:
     """Send bytes or str to WebSocket.
 
-    - Even if Exception is raised, the {WebSocket} would **not** be closed automatically, you should close it manually
+    - Even if Exception is raised, the `WebSocket` would **not** be closed automatically, you should close it manually
 
     Args:
         websocket: The starlette_ws.WebSocket that has been connected.
@@ -261,8 +278,8 @@ async def _starlette_ws_send_bytes_or_str(
 
 
 async def _wait_client_then_send_to_server(
-    *, client_ws: starlette_ws.WebSocket, server_ws: httpx_ws.AsyncWebSocketSession
-) -> starlette_ws.WebSocketDisconnect:
+    client_ws: starlette_ws.WebSocket, server_ws: httpx_ws.AsyncWebSocketSession
+) -> NoReturn:
     """Receive data from client, then send to target server.
 
     Args:
@@ -270,24 +287,22 @@ async def _wait_client_then_send_to_server(
         server_ws: The websocket which send data to target server.
 
     Returns:
-        If the client_ws sends a shutdown message normally, will return starlette_ws.WebSocketDisconnect.
+        NoReturn: Never return. Always run forever, except encounter an error, then raise it.
 
     Raises:
-        error for receiving: refer to `_starlette_ws_receive_bytes_or_str`
-        error for sending: refer to `_httpx_ws_send_bytes_or_str`
+        error for receiving: refer to `_starlette_ws_receive_bytes_or_str`.
+            starlette.websockets.WebSocketDisconnect: If the WebSocket is disconnected.
+                - **This is normal behavior that you should catch**.
+        error for sending: refer to `_httpx_ws_send_bytes_or_str`.
     """
     while True:
-        try:
-            receive = await _starlette_ws_receive_bytes_or_str(client_ws)
-        except starlette_ws.WebSocketDisconnect as e:
-            return e
-        else:
-            await _httpx_ws_send_bytes_or_str(server_ws, receive)
+        receive = await _starlette_ws_receive_bytes_or_str(client_ws)
+        await _httpx_ws_send_bytes_or_str(server_ws, receive)
 
 
 async def _wait_server_then_send_to_client(
-    *, client_ws: starlette_ws.WebSocket, server_ws: httpx_ws.AsyncWebSocketSession
-) -> httpx_ws.WebSocketDisconnect:
+    client_ws: starlette_ws.WebSocket, server_ws: httpx_ws.AsyncWebSocketSession
+) -> NoReturn:
     """Receive data from target server, then send to client.
 
     Args:
@@ -295,102 +310,84 @@ async def _wait_server_then_send_to_client(
         server_ws: The websocket which receive data of target server.
 
     Returns:
-        If the server_ws sends a shutdown message normally, will return httpx_ws.WebSocketDisconnect.
+        NoReturn: Never return. Always run forever, except encounter an error, then raise it.
 
     Raises:
-        error for receiving: refer to `_httpx_ws_receive_bytes_or_str`
-        error for sending: refer to `_starlette_ws_send_bytes_or_str`
+        error for receiving: refer to `_httpx_ws_receive_bytes_or_str`.
+            httpx_ws.WebSocketDisconnect: If the WebSocket is disconnected.
+                - **This is normal behavior that you should catch**
+        error for sending: refer to `_starlette_ws_send_bytes_or_str`.
     """
     while True:
-        try:
-            receive = await _httpx_ws_receive_bytes_or_str(server_ws)
-        except httpx_ws.WebSocketDisconnect as e:
-            return e
-        else:
-            await _starlette_ws_send_bytes_or_str(client_ws, receive)
+        receive = await _httpx_ws_receive_bytes_or_str(server_ws)
+        await _starlette_ws_send_bytes_or_str(client_ws, receive)
 
 
 async def _close_ws(
+    excgroup: _WsExceptionGroupType,
+    /,
     *,
-    client_to_server_task: _ClentToServerTaskType,
-    server_to_client_task: _ServerToClientTaskType,
     client_ws: starlette_ws.WebSocket,
     server_ws: httpx_ws.AsyncWebSocketSession,
 ) -> None:
-    """Close ws connection and send status code based on task results.
-
-    - If there is an error, or can't get status code from tasks, then always send a 1011 status code
-    - Will close ws connection whatever happens.
+    """Close ws connection and send status code based on `excgroup`.
 
     Args:
-        client_to_server_task: client_to_server_task
-        server_to_client_task: server_to_client_task
+        excgroup: The exception group raised when running both client and server proxy tasks.
+            There should be at most 2 exceptions, one for client, one for server.
+            If contains `starlette_ws.WebSocketDisconnect`, then will close `server_ws`;
+            If contains `httpx_ws.WebSocketDisconnect`, then will close `client_ws`.
+            Else, will close both ws connections with status code `1011`.
         client_ws: client_ws
         server_ws: server_ws
+
     """
-    try:
-        # NOTE: 先判断 cancelled ，因为被取消的 task.exception() 会引发异常
-        client_error = (
-            asyncio.CancelledError
-            if client_to_server_task.cancelled()
-            else client_to_server_task.exception()
-        )
-        server_error = (
-            asyncio.CancelledError
-            if server_to_client_task.cancelled()
-            else server_to_client_task.exception()
-        )
+    assert (
+        len(excgroup.exceptions) <= 2
+    ), "There should be at most 2 exceptions, one for client, one for server."
 
-        if client_error is None:
-            # clinet端收到正常关闭消息，则关闭server端
-            disconnection = client_to_server_task.result()
-            await server_ws.close(disconnection.code, disconnection.reason)
-            return
-        elif server_error is None:
-            # server端收到正常关闭消息，则关闭client端
-            disconnection = server_to_client_task.result()
-            await client_ws.close(disconnection.code, disconnection.reason)
-            return
-        else:
-            # 如果上述情况都没有发生，意味着至少其中一个任务发生了异常，导致了另一个任务被取消
-            # NOTE: 我们不在这个分支调用 `ws.close`，而是留到最后的 finally 来关闭
-            client_info = client_ws.client
-            client_host, client_port = (
-                (client_info.host, client_info.port)
-                if client_info is not None
-                else (None, None)
-            )
-            # 这里不用dedent是为了更好的性能
-            msg = f"""\
-An error occurred in the websocket connection for {client_host}:{client_port}.
-client_error: {client_error}
-server_error: {server_error}\
+    client_ws_disc_group = (
+        excgroup.subgroup(  # pyright: ignore[reportUnknownMemberType]
+            starlette_ws.WebSocketDisconnect
+        )
+    )
+    if client_ws_disc_group:
+        client_disconnect = client_ws_disc_group.exceptions[0]
+        # XXX: `isinstance` to make pyright happy
+        assert isinstance(client_disconnect, starlette_ws.WebSocketDisconnect)
+        return await server_ws.close(client_disconnect.code, client_disconnect.reason)
+
+    server_ws_disc_group = (
+        excgroup.subgroup(  # pyright: ignore[reportUnknownMemberType]
+            httpx_ws.WebSocketDisconnect
+        )
+    )
+    if server_ws_disc_group:
+        server_disconnect = server_ws_disc_group.exceptions[0]
+        # XXX: `isinstance` to make pyright happy
+        assert isinstance(server_disconnect, httpx_ws.WebSocketDisconnect)
+        return await client_ws.close(server_disconnect.code, server_disconnect.reason)
+
+    # 如果上述情况都没有发生，意味着至少其中一个任务发生了异常，导致了另一个任务被取消
+    client_info = client_ws.client
+    client_host, client_port = (
+        (client_info.host, client_info.port)
+        if client_info is not None
+        else (None, None)
+    )
+    # 这里不用dedent是为了更好的性能
+    msg = f"""\
+An error group occurred in the websocket connection for {client_host}:{client_port}.
+error group: {excgroup.exceptions}\
 """
-            logging.warning(msg)
+    logging.warning(msg)
 
-    except (
-        Exception
-    ) as e:  # pragma: no cover # 这个分支是一个保险分支，通常无法执行，所以只进行记录
-        logging.error(
-            f"{e} when close ws connection. client: {client_to_server_task}, server:{server_to_client_task}"
-        )
-        raise
-
-    finally:
-        # 无论如何，确保关闭两个websocket
-        # 状态码参考: https://developer.mozilla.org/zh-CN/docs/Web/API/CloseEvent
-        # https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
-        try:
-            await client_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
-        except Exception:
-            # 这个分支通常会被触发，因为uvicorn服务器在重复调用close时会引发异常
-            pass
-        try:
-            await server_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
-        except Exception as e:  # pragma: no cover
-            # 这个分支是一个保险分支，通常无法执行，所以只进行记录
-            # 不会触发的原因是，负责服务端 ws 连接的 httpx_ws 支持重复调用close而不引发错误
-            logging.debug("Unexpected error for debug", exc_info=e)
+    # Anyway, we should close both ws connections.
+    # Why we use `1011` code, refer to:
+    #   https://developer.mozilla.org/zh-CN/docs/Web/API/CloseEvent
+    #   https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
+    await client_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
+    await server_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
 
 
 #################### # ####################
@@ -523,7 +520,7 @@ class BaseWebSocketProxy(BaseProxyModel):
 
             proxy_ws = await stack.enter_async_context(
                 httpx_ws.aconnect_ws(
-                    # 这个是httpx_ws类型注解的问题，其实是可以使用httpx.URL的
+                    # XXX: 这个是httpx_ws类型注解的问题，其实是可以使用httpx.URL的
                     url=target_url,  # pyright: ignore [reportArgumentType]
                     client=client,
                     max_message_size_bytes=max_message_size_bytes,
@@ -573,71 +570,26 @@ class BaseWebSocketProxy(BaseProxyModel):
                 # headers=...
             )
 
-            client_to_server_task = asyncio.create_task(
-                _wait_client_then_send_to_server(
-                    client_ws=websocket,
-                    server_ws=proxy_ws,
-                ),
-                name="client_to_server_task",
-            )
-            server_to_client_task = asyncio.create_task(
-                _wait_server_then_send_to_client(
-                    client_ws=websocket,
-                    server_ws=proxy_ws,
-                ),
-                name="server_to_client_task",
-            )
-            # 保持强引用: https://docs.python.org/zh-cn/3.12/library/asyncio-task.html#creating-tasks
-            task_group = _ClientServerProxyTask(
-                client_to_server_task=client_to_server_task,
-                server_to_client_task=server_to_client_task,
-            )
-
-            # NOTE: 考虑这两种情况：
-            # 1. 如果一个任务在发送阶段退出：
-            #   这意味着对应发送的ws已经关闭或者出错
-            #   那么另一个任务很快就会在接收该ws的时候引发异常而退出
-            #   很快，最终两个任务都结束
-            #   **这时候pending 可能 为空，而done为两个任务**
-            # 2. 如果一个任务在接收阶段退出：
-            #   这意味着对应接收的ws已经关闭或者发生出错
-            #   - 对于另一个任务的发送，可能会在发送的时候引发异常而退出
-            #       - 可能指的是: wsproto后端的uvicorn发送消息永远不会出错
-            #       - https://github.com/encode/uvicorn/discussions/2137
-            #   - 对于另一个任务的接收，可能会等待很久，才能继续进行发送任务而引发异常而退出
-            #   **这时候pending一般为一个未结束任务**
-            #
-            #   因为第二种情况的存在，所以需要用 wait_for 强制让其退出
-            #   但考虑到第一种情况，先等它 1s ，看看能否正常退出
             try:
-                _, pending = await asyncio.wait(
-                    task_group,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                for (
-                    pending_task
-                ) in pending:  # NOTE: pending 一般为一个未结束任务，或者为空
-                    # 开始取消未结束的任务
-                    try:
-                        await asyncio.wait_for(pending_task, timeout=1)
-                    except asyncio.TimeoutError:
-                        logging.debug(f"{pending} TimeoutError, it's normal.")
-                    except Exception as e:
-                        # 取消期间可能另一个ws会发生异常，这个是正常情况，且会被 asyncio.wait_for 传播
-                        logging.debug(
-                            f"{pending} raise error when being canceled, it's normal. error: {e}"
-                        )
-            except Exception as e:  # pragma: no cover # 这个是保险分支，通常无法执行
-                logging.warning(
-                    f"Something wrong, please contact the developer. error: {e}"
-                )
-                raise
-            finally:
-                # 无论如何都要关闭两个websocket
-                # NOTE: 这时候两个任务都已经结束
+                async with anyio.create_task_group() as tg:
+                    tg.start_soon(
+                        _wait_client_then_send_to_server,
+                        websocket,
+                        proxy_ws,
+                        name="client_to_server_task",
+                    )
+                    tg.start_soon(
+                        _wait_server_then_send_to_client,
+                        websocket,
+                        proxy_ws,
+                        name="server_to_client_task",
+                    )
+            # XXX: `ExceptionGroup[Any]` is illegal, so we have to ignore the type issue
+            except (
+                ExceptionGroup
+            ) as excgroup:  # pyright: ignore[reportUnknownVariableType]
                 await _close_ws(
-                    client_to_server_task=client_to_server_task,
-                    server_to_client_task=server_to_client_task,
+                    excgroup,  # pyright: ignore[reportUnknownArgumentType]
                     client_ws=websocket,
                     server_ws=proxy_ws,
                 )

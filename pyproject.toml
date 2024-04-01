@@ -50,9 +50,11 @@ dynamic = ["version"]
 
 dependencies = [
     "httpx",
-    "httpx-ws >= 0.4.2",
+    "httpx-ws >= 0.5.2",
     "starlette",
     "typing_extensions >=4.5.0",
+    "anyio >= 4",
+    "exceptiongroup",
 ]
 
 [project.optional-dependencies]
@@ -97,7 +99,6 @@ dependencies = [
     "pytest-cov ==  4.*",
     "uvicorn[standard] < 1.0.0", # TODO: Once it releases version 1.0.0, we will remove this restriction.
     "httpx[http2]",              # we don't set version here, instead set it in `[project].dependencies`.
-    "anyio",                     # we don't set version here, because fastapi has a dependency on it
     "asgi-lifespan==2.*",
     "pytest-timeout==2.*",
 ]
