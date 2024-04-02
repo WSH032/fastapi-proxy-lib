@@ -16,7 +16,6 @@ from typing import (
     Coroutine,
     Literal,
     Protocol,
-    Union,
 )
 
 import pytest
@@ -64,7 +63,7 @@ AppFactoryFixture = Callable[..., Coroutine[None, None, ASGIApp]]
 
 class UvicornServerFixture(Protocol):  # noqa: D101
     def __call__(  # noqa: D102
-        self, config: uvicorn.Config, contx_exit_timeout: Union[int, float, None] = None
+        self, config: uvicorn.Config
     ) -> Coroutine[None, None, UvicornServer]: ...
 
 
@@ -199,11 +198,9 @@ async def uvicorn_server_fixture() -> AsyncIterator[UvicornServerFixture]:
     """
     async with AsyncExitStack() as exit_stack:
 
-        async def uvicorn_server_fct(
-            config: uvicorn.Config, contx_exit_timeout: Union[int, float, None] = None
-        ) -> UvicornServer:
+        async def uvicorn_server_fct(config: uvicorn.Config) -> UvicornServer:
             uvicorn_server = await exit_stack.enter_async_context(
-                UvicornServer(config=config, contx_exit_timeout=contx_exit_timeout)
+                UvicornServer(config=config)
             )
             return uvicorn_server
 

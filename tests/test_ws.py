@@ -1,11 +1,11 @@
 # noqa: D100
 
 
-import asyncio
 from contextlib import AsyncExitStack
 from multiprocessing import Process, Queue
 from typing import Any, Dict, Literal, Optional
 
+import anyio
 import httpx
 import httpx_ws
 import pytest
@@ -25,7 +25,6 @@ from .tool import (
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 0
-DEFAULT_CONTX_EXIT_TIMEOUT = 5
 
 # WS_BACKENDS_NEED_BE_TESTED = ("websockets", "wsproto")
 # # FIXME: wsproto 有问题，暂时不测试
@@ -56,14 +55,14 @@ def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
     )
 
     async def run():
-        await target_ws_server.aenter()
-        url = str(target_ws_server.contx_socket_url)
-        queue.put(url)
-        queue.close()
-        while True:  # run forever
-            await asyncio.sleep(0.1)
+        async with target_ws_server:
+            url = str(target_ws_server.contx_socket_url)
+            queue.put(url)
+            queue.close()
+            while True:  # run forever
+                await anyio.sleep(0.1)
 
-    asyncio.run(run())
+    anyio.run(run)
 
 
 def _subprocess_run_httpx_ws(
@@ -96,9 +95,9 @@ def _subprocess_run_httpx_ws(
         queue.put("done")
         queue.close()
         while True:  # run forever
-            await asyncio.sleep(0.1)
+            await anyio.sleep(0.1)
 
-    asyncio.run(run())
+    anyio.run(run)
 
 
 class TestReverseWsProxy(AbstractTestProxy):
@@ -120,7 +119,6 @@ class TestReverseWsProxy(AbstractTestProxy):
             uvicorn.Config(
                 echo_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
             ),
-            contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
         )
 
         target_server_base_url = str(target_ws_server.contx_socket_url)
@@ -135,7 +133,6 @@ class TestReverseWsProxy(AbstractTestProxy):
             uvicorn.Config(
                 reverse_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
             ),
-            contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
         )
 
         proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
@@ -226,7 +223,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         # 避免从队列中get导致的异步阻塞
         while aconnect_ws_subprocess_queue.empty():
-            await asyncio.sleep(0.1)
+            await anyio.sleep(0.1)
         _ = aconnect_ws_subprocess_queue.get()  # 获取到了即代表连接建立成功
 
         # force shutdown client
@@ -267,7 +264,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         # 避免从队列中get导致的异步阻塞
         while subprocess_queue.empty():
-            await asyncio.sleep(0.1)
+            await anyio.sleep(0.1)
         target_server_base_url = subprocess_queue.get()
 
         client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
@@ -300,13 +297,11 @@ class TestReverseWsProxy(AbstractTestProxy):
                     await ws0.receive()
                 assert exce.value.code == 1011
 
-                loop = asyncio.get_running_loop()
-
-                seconde_ws_recv_start = loop.time()
+                seconde_ws_recv_start = anyio.current_time()
                 with pytest.raises(httpx_ws.WebSocketDisconnect) as exce:
                     await ws1.receive()
                 assert exce.value.code == 1011
-                seconde_ws_recv_end = loop.time()
+                seconde_ws_recv_end = anyio.current_time()
 
                 # HACK: 由于收到关闭代码需要40s，目前无法确定是什么原因，
                 # 所以目前会同时测试两个客户端的连接，

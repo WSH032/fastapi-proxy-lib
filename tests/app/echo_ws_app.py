@@ -1,8 +1,8 @@
 # ruff: noqa: D100
 # pyright: reportUnusedFunction=false
 
-import asyncio
 
+import anyio
 from fastapi import FastAPI, WebSocket
 from starlette.websockets import WebSocketDisconnect
 
@@ -76,7 +76,7 @@ def get_app() -> AppDataclass4Test:  # noqa: C901, PLR0915
         test_app_dataclass.request_dict["request"] = websocket
 
         await websocket.accept()
-        await asyncio.sleep(0.3)
+        await anyio.sleep(0.3)
         await websocket.close(1001)
 
     @app.websocket("/reject_handshake")
