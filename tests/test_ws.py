@@ -3,55 +3,43 @@
 
 from contextlib import AsyncExitStack
 from multiprocessing import Process, Queue
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Optional
 
 import anyio
 import httpx
 import httpx_ws
 import pytest
-import uvicorn
 from fastapi_proxy_lib.fastapi.app import reverse_ws_app as get_reverse_ws_app
 from httpx_ws import aconnect_ws
 from starlette import websockets as starlette_websockets_module
 from typing_extensions import override
 
 from .app.echo_ws_app import get_app as get_ws_test_app
-from .app.tool import UvicornServer
-from .conftest import UvicornServerFixture
+from .app.tool import TestServer
+from .conftest import TestServerFixture
 from .tool import (
     AbstractTestProxy,
     Tool4TestFixture,
 )
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 0
-
-# WS_BACKENDS_NEED_BE_TESTED = ("websockets", "wsproto")
-# # FIXME: wsproto 有问题，暂时不测试
-# # ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
-# # https://github.com/encode/uvicorn/discussions/2105
-WS_BACKENDS_NEED_BE_TESTED = ("websockets",)
+DEFAULT_PORT = 0  # random port
 
 # https://www.python-httpx.org/advanced/#http-proxying
 NO_PROXIES: Dict[Any, Any] = {"all://": None}
 
 
-def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
+def _subprocess_run_echo_ws_server(queue: "Queue[str]"):
     """Run echo ws app in subprocess.
 
     Args:
         queue: The queue for subprocess to put the url of echo ws app.
             After the server is started, the url will be put into the queue.
-        **kwargs: The kwargs for `uvicorn.Config`
     """
-    default_kwargs = {
-        "app": get_ws_test_app().app,
-        "port": DEFAULT_PORT,
-        "host": DEFAULT_HOST,
-    }
-    default_kwargs.update(kwargs)
-    target_ws_server = UvicornServer(
-        uvicorn.Config(**default_kwargs),  # pyright: ignore[reportArgumentType]
+    target_ws_server = TestServer(
+        app=get_ws_test_app().app,
+        host=DEFAULT_HOST,
+        port=DEFAULT_PORT,
     )
 
     async def run():
@@ -104,21 +92,18 @@ class TestReverseWsProxy(AbstractTestProxy):
     """For testing reverse websocket proxy."""
 
     @override
-    @pytest.fixture(params=WS_BACKENDS_NEED_BE_TESTED)
+    @pytest.fixture()
     async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
-        uvicorn_server_fixture: UvicornServerFixture,
-        request: pytest.FixtureRequest,
+        test_server_fixture: TestServerFixture,
     ) -> Tool4TestFixture:
         """目标服务器请参考`tests.app.echo_ws_app.get_app`."""
         echo_ws_test_model = get_ws_test_app()
         echo_ws_app = echo_ws_test_model.app
         echo_ws_get_request = echo_ws_test_model.get_request
 
-        target_ws_server = await uvicorn_server_fixture(
-            uvicorn.Config(
-                echo_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
-            ),
+        target_ws_server = await test_server_fixture(
+            app=echo_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST
         )
 
         target_server_base_url = str(target_ws_server.contx_socket_url)
@@ -129,10 +114,8 @@ class TestReverseWsProxy(AbstractTestProxy):
             client=client_for_conn_to_target_server, base_url=target_server_base_url
         )
 
-        proxy_ws_server = await uvicorn_server_fixture(
-            uvicorn.Config(
-                reverse_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
-            ),
+        proxy_ws_server = await test_server_fixture(
+            app=reverse_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST
         )
 
         proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
@@ -197,7 +180,7 @@ class TestReverseWsProxy(AbstractTestProxy):
                 client_for_conn_to_proxy_server,
             ) as ws:
                 pass
-        # uvicorn 服务器在未调用`websocket.accept()`之前调用了`websocket.close()`，会发生403
+        # Starlette 在未调用`websocket.accept()`之前调用了`websocket.close()`，会发生403
         assert exce.value.response.status_code == 403
 
         ########## 客户端突然关闭时，服务器应该收到1011 ##########
@@ -245,10 +228,7 @@ class TestReverseWsProxy(AbstractTestProxy):
     # FIXME: 调查为什么收到关闭代码需要40s
     @pytest.mark.timeout(60)
     @pytest.mark.anyio()
-    @pytest.mark.parametrize("ws_backend", WS_BACKENDS_NEED_BE_TESTED)
-    async def test_target_server_shutdown_abnormally(
-        self, ws_backend: Literal["websockets", "wsproto"]
-    ) -> None:
+    async def test_target_server_shutdown_abnormally(self) -> None:
         """测试因为目标服务器突然断连导致的，ws桥接异常关闭.
 
         需要在 60s 内向客户端发送 1011 关闭代码.
@@ -256,9 +236,8 @@ class TestReverseWsProxy(AbstractTestProxy):
         subprocess_queue: "Queue[str]" = Queue()
 
         target_ws_server_subprocess = Process(
-            target=_subprocess_run_echo_ws_uvicorn_server,
+            target=_subprocess_run_echo_ws_server,
             args=(subprocess_queue,),
-            kwargs={"port": DEFAULT_PORT, "host": DEFAULT_HOST, "ws": ws_backend},
         )
         target_ws_server_subprocess.start()
 
@@ -273,10 +252,10 @@ class TestReverseWsProxy(AbstractTestProxy):
             client=client_for_conn_to_target_server, base_url=target_server_base_url
         )
 
-        async with UvicornServer(
-            uvicorn.Config(
-                reverse_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=ws_backend
-            )
+        async with TestServer(
+            app=reverse_ws_app,
+            port=DEFAULT_PORT,
+            host=DEFAULT_HOST,
         ) as proxy_ws_server:
             proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
 

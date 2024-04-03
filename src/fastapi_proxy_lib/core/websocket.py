@@ -42,7 +42,7 @@ try:
         DEFAULT_MAX_MESSAGE_SIZE_BYTES,
         DEFAULT_QUEUE_SIZE,
     )
-except ImportError:
+except ImportError:  # pragma: no cover
     # ref: https://github.com/frankie567/httpx-ws/blob/b2135792141b71551b022ff0d76542a0263a890c/httpx_ws/_api.py#L31-L34
     DEFAULT_KEEPALIVE_PING_TIMEOUT_SECONDS = (  # pyright: ignore[reportConstantRedefinition]
         20.0

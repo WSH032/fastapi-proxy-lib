@@ -15,12 +15,13 @@ from typing import (
     Callable,
     Coroutine,
     Literal,
+    Optional,
     Protocol,
 )
 
 import pytest
-import uvicorn
 from asgi_lifespan import LifespanManager
+from fastapi import FastAPI
 from fastapi_proxy_lib.fastapi.app import (
     forward_http_app,
     reverse_http_app,
@@ -30,7 +31,7 @@ from typing_extensions import ParamSpec
 
 from .app.echo_http_app import get_app as get_http_test_app
 from .app.echo_ws_app import get_app as get_ws_test_app
-from .app.tool import AppDataclass4Test, UvicornServer
+from .app.tool import AppDataclass4Test, TestServer
 
 # ASGI types.
 # Copied from: https://github.com/florimondmanca/asgi-lifespan/blob/fbb0f440337314be97acaae1a3c0c7a2ec8298dd/src/asgi_lifespan/_types.py
@@ -61,17 +62,28 @@ AppFactoryFixture = Callable[..., Coroutine[None, None, ASGIApp]]
 """The lifespan of app will be managed automatically by pytest."""
 
 
-class UvicornServerFixture(Protocol):  # noqa: D101
+class TestServerFixture(Protocol):  # noqa: D101
     def __call__(  # noqa: D102
-        self, config: uvicorn.Config
-    ) -> Coroutine[None, None, UvicornServer]: ...
+        self,
+        app: FastAPI,
+        host: str,
+        port: int,
+        server_type: Optional[Literal["uvicorn", "hypercorn"]] = None,
+    ) -> Coroutine[None, None, TestServer]: ...
 
 
 # https://anyio.readthedocs.io/en/stable/testing.html#specifying-the-backends-to-run-on
-@pytest.fixture()
-def anyio_backend() -> Literal["asyncio"]:
+@pytest.fixture(
+    params=[
+        pytest.param(("asyncio", {"use_uvloop": False}), id="asyncio"),
+        pytest.param(
+            ("trio", {"restrict_keyboard_interrupt_to_checkpoints": True}), id="trio"
+        ),
+    ],
+)
+def anyio_backend(request: pytest.FixtureRequest):
     """Specify the async backend for `pytest.mark.anyio`."""
-    return "asyncio"
+    return request.param
 
 
 @pytest.fixture()
@@ -191,17 +203,22 @@ def reverse_ws_app_fct(
 
 
 @pytest.fixture()
-async def uvicorn_server_fixture() -> AsyncIterator[UvicornServerFixture]:
-    """Fixture for UvicornServer.
+async def test_server_fixture() -> AsyncIterator[TestServerFixture]:
+    """Fixture for TestServer.
 
     Will launch and shutdown automatically.
     """
     async with AsyncExitStack() as exit_stack:
 
-        async def uvicorn_server_fct(config: uvicorn.Config) -> UvicornServer:
-            uvicorn_server = await exit_stack.enter_async_context(
-                UvicornServer(config=config)
+        async def test_server_fct(
+            app: FastAPI,
+            host: str,
+            port: int,
+            server_type: Optional[Literal["uvicorn", "hypercorn"]] = None,
+        ) -> TestServer:
+            test_server = await exit_stack.enter_async_context(
+                TestServer(app=app, host=host, port=port, server_type=server_type)
             )
-            return uvicorn_server
+            return test_server
 
-        yield uvicorn_server_fct
+        yield test_server_fct

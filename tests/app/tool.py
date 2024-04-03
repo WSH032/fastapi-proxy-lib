@@ -2,7 +2,7 @@
 
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
-from typing import Any, Literal, TypedDict, Union
+from typing import Any, Literal, Optional, TypedDict, Union
 
 import anyio
 import httpx
@@ -11,17 +11,20 @@ import uvicorn
 from fastapi import FastAPI
 from hypercorn import Config as HyperConfig
 from hypercorn.asyncio.run import (
-    worker_serve as hyper_aio_serve,  # pyright: ignore[reportUnknownVariableType]
+    worker_serve as hyper_aio_worker_serve,  # pyright: ignore[reportUnknownVariableType]
 )
 from hypercorn.trio.run import (
-    worker_serve as hyper_trio_serve,  # pyright: ignore[reportUnknownVariableType]
+    worker_serve as hyper_trio_worker_serve,  # pyright: ignore[reportUnknownVariableType]
+)
+from hypercorn.utils import (
+    repr_socket_addr,  # pyright: ignore[reportUnknownVariableType]
 )
 from hypercorn.utils import (
     wrap_app as hyper_wrap_app,  # pyright: ignore[reportUnknownVariableType]
 )
 from starlette.requests import Request
 from starlette.websockets import WebSocket
-from typing_extensions import Self
+from typing_extensions import Self, assert_never
 
 ServerRecvRequestsTypes = Union[Request, WebSocket]
 
@@ -55,7 +58,7 @@ class AppDataclass4Test:
         return server_recv_request
 
 
-class UvicornServer(uvicorn.Server):
+class _UvicornServer(uvicorn.Server):
     """subclass of `uvicorn.Server` which can use AsyncContext to launch and shutdown automatically."""
 
     async def __aenter__(self) -> Self:
@@ -89,7 +92,9 @@ class UvicornServer(uvicorn.Server):
         config = self.config
         if config.fd is not None or config.uds is not None:
             raise RuntimeError("Only support tcp socket.")
-        # refer to: https://docs.python.org/zh-cn/3/library/socket.html#socket-families
+
+        # Implement ref:
+        # https://github.com/encode/uvicorn/blob/a2219eb2ed2bbda4143a0fb18c4b0578881b1ae8/uvicorn/server.py#L201-L220
         host, port = self._socket.getsockname()[:2]
         return httpx.URL(
             host=host,
@@ -99,25 +104,42 @@ class UvicornServer(uvicorn.Server):
         )
 
 
-class HypercornServer:
+class _HypercornServer:
     """An AsyncContext to launch and shutdown Hypercorn server automatically."""
 
-    def __init__(self, app: FastAPI, config: HyperConfig):  # noqa: D107
+    def __init__(self, app: FastAPI, config: HyperConfig):
         self.config = config
         self.app = app
         self.should_exit = anyio.Event()
 
     async def __aenter__(self) -> Self:
         """Launch the server."""
-        self._sockets = self.config.create_sockets()
         self._exit_stack = AsyncExitStack()
 
         self.current_async_lib = sniffio.current_async_library()
 
         if self.current_async_lib == "asyncio":
-            serve_func = hyper_aio_serve  # pyright: ignore[reportUnknownVariableType]
+            serve_func = (  # pyright: ignore[reportUnknownVariableType]
+                hyper_aio_worker_serve
+            )
+
+            # Implement ref:
+            # https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/asyncio/run.py#L89-L90
+            self._sockets = self.config.create_sockets()
+
         elif self.current_async_lib == "trio":
-            serve_func = hyper_trio_serve  # pyright: ignore[reportUnknownVariableType]
+            serve_func = (  # pyright: ignore[reportUnknownVariableType]
+                hyper_trio_worker_serve
+            )
+
+            # Implement ref:
+            # https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/trio/run.py#L51-L56
+            self._sockets = self.config.create_sockets()
+            for sock in self._sockets.secure_sockets:
+                sock.listen(self.config.backlog)
+            for sock in self._sockets.insecure_sockets:
+                sock.listen(self.config.backlog)
+
         else:
             raise RuntimeError(f"Unsupported async library {self.current_async_lib!r}")
 
@@ -133,6 +155,7 @@ class HypercornServer:
                 ),
                 self.config,
                 shutdown_trigger=self.should_exit.wait,
+                sockets=self._sockets,
             )
 
         task_group = await self._exit_stack.enter_async_context(
@@ -154,13 +177,32 @@ class HypercornServer:
         Note: The path of url is explicitly set to "/".
         """
         config = self.config
+        sockets = self._sockets
 
-        bind = config.bind[0]
+        # Implement ref:
+        #   https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/asyncio/run.py#L112-L149
+        #   https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/trio/run.py#L61-L82
+
+        # We only run on one socket each time,
+        # so we raise `RuntimeError` to avoid other unknown errors during testing.
+        if sockets.insecure_sockets:
+            if len(sockets.insecure_sockets) > 1:
+                raise RuntimeError("Hypercorn test: Multiple insecure_sockets found.")
+            socket = sockets.insecure_sockets[0]
+        elif sockets.secure_sockets:
+            if len(sockets.secure_sockets) > 1:
+                raise RuntimeError("Hypercorn test: secure_sockets sockets found.")
+            socket = sockets.secure_sockets[0]
+        else:
+            raise RuntimeError("Hypercorn test: No socket found.")
+
+        bind = repr_socket_addr(socket.family, socket.getsockname())
         if bind.startswith(("unix:", "fd://")):
             raise RuntimeError("Only support tcp socket.")
 
-        # refer to: https://docs.python.org/zh-cn/3/library/socket.html#socket-families
-        host, port = config.bind[0].split(":")
+        # Implement ref:
+        # https://docs.python.org/zh-cn/3/library/socket.html#socket-families
+        host, port = bind.split(":")
         port = int(port)
 
         return httpx.URL(
@@ -179,12 +221,16 @@ class TestServer:
         app: FastAPI,
         host: str,
         port: int,
-        server_type: Literal["uvicorn", "hypercorn"] = "hypercorn",
+        server_type: Optional[Literal["uvicorn", "hypercorn"]] = None,
     ):
         """Only support ipv4 address.
 
         If use uvicorn, it only support asyncio backend.
+
+        If `host` == 0, then use random port.
         """
+        server_type = server_type if server_type is not None else "hypercorn"
+
         self.app = app
         self.host = host
         self.port = port
@@ -195,10 +241,12 @@ class TestServer:
             config.bind = f"{host}:{port}"
 
             self.config = config
-            self.server = HypercornServer(app, config)
-        else:
+            self.server = _HypercornServer(app, config)
+        elif self.server_type == "uvicorn":
             self.config = uvicorn.Config(app, host=host, port=port)
-            self.server = UvicornServer(self.config)
+            self.server = _UvicornServer(self.config)
+        else:
+            assert_never(self.server_type)
 
     async def __aenter__(self) -> Self:
         """Launch the server."""
