@@ -31,7 +31,7 @@ from typing_extensions import ParamSpec
 
 from .app.echo_http_app import get_app as get_http_test_app
 from .app.echo_ws_app import get_app as get_ws_test_app
-from .app.tool import AppDataclass4Test, TestServer
+from .app.tool import AppDataclass4Test, AutoServer
 
 # ASGI types.
 # Copied from: https://github.com/florimondmanca/asgi-lifespan/blob/fbb0f440337314be97acaae1a3c0c7a2ec8298dd/src/asgi_lifespan/_types.py
@@ -62,14 +62,14 @@ AppFactoryFixture = Callable[..., Coroutine[None, None, ASGIApp]]
 """The lifespan of app will be managed automatically by pytest."""
 
 
-class TestServerFixture(Protocol):  # noqa: D101
+class AutoServerFixture(Protocol):  # noqa: D101
     def __call__(  # noqa: D102
         self,
         app: FastAPI,
         host: str,
         port: int,
         server_type: Optional[Literal["uvicorn", "hypercorn"]] = None,
-    ) -> Coroutine[None, None, TestServer]: ...
+    ) -> Coroutine[None, None, AutoServer]: ...
 
 
 # https://anyio.readthedocs.io/en/stable/testing.html#specifying-the-backends-to-run-on
@@ -203,22 +203,22 @@ def reverse_ws_app_fct(
 
 
 @pytest.fixture()
-async def test_server_fixture() -> AsyncIterator[TestServerFixture]:
-    """Fixture for TestServer.
+async def auto_server_fixture() -> AsyncIterator[AutoServerFixture]:
+    """Fixture for AutoServer.
 
     Will launch and shutdown automatically.
     """
     async with AsyncExitStack() as exit_stack:
 
-        async def test_server_fct(
+        async def auto_server_fct(
             app: FastAPI,
             host: str,
             port: int,
             server_type: Optional[Literal["uvicorn", "hypercorn"]] = None,
-        ) -> TestServer:
-            test_server = await exit_stack.enter_async_context(
-                TestServer(app=app, host=host, port=port, server_type=server_type)
+        ) -> AutoServer:
+            auto_server = await exit_stack.enter_async_context(
+                AutoServer(app=app, host=host, port=port, server_type=server_type)
             )
-            return test_server
+            return auto_server
 
-        yield test_server_fct
+        yield auto_server_fct

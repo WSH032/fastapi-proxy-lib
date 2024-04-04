@@ -3,7 +3,7 @@
 
 from contextlib import AsyncExitStack
 from multiprocessing import Process, Queue
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import anyio
 import httpx
@@ -15,8 +15,8 @@ from starlette import websockets as starlette_websockets_module
 from typing_extensions import override
 
 from .app.echo_ws_app import get_app as get_ws_test_app
-from .app.tool import TestServer
-from .conftest import TestServerFixture
+from .app.tool import AutoServer
+from .conftest import AutoServerFixture
 from .tool import (
     AbstractTestProxy,
     Tool4TestFixture,
@@ -25,7 +25,8 @@ from .tool import (
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 0  # random port
 
-# https://www.python-httpx.org/advanced/#http-proxying
+# https://www.python-httpx.org/advanced/proxies/
+# NOTE: Foce to connect directly, avoid using system proxies
 NO_PROXIES: Dict[Any, Any] = {"all://": None}
 
 
@@ -36,7 +37,7 @@ def _subprocess_run_echo_ws_server(queue: "Queue[str]"):
         queue: The queue for subprocess to put the url of echo ws app.
             After the server is started, the url will be put into the queue.
     """
-    target_ws_server = TestServer(
+    target_ws_server = AutoServer(
         app=get_ws_test_app().app,
         host=DEFAULT_HOST,
         port=DEFAULT_PORT,
@@ -55,29 +56,22 @@ def _subprocess_run_echo_ws_server(queue: "Queue[str]"):
 
 def _subprocess_run_httpx_ws(
     queue: "Queue[str]",
-    kwargs_async_client: Optional[Dict[str, Any]] = None,
-    kwargs_aconnect_ws: Optional[Dict[str, Any]] = None,
+    aconnect_ws_url: str,
 ):
     """Run aconnect_ws in subprocess.
 
     Args:
         queue: The queue for subprocess to put something for flag of ws connection established.
-        kwargs_async_client: The kwargs for `httpx.AsyncClient`
-        kwargs_aconnect_ws: The kwargs for `httpx_ws.aconnect_ws`
+        aconnect_ws_url: The websocket url for aconnect_ws.
     """
-    kwargs_async_client = kwargs_async_client or {}
-    kwargs_aconnect_ws = kwargs_aconnect_ws or {}
-
-    kwargs_async_client.pop("proxies", None)
-    kwargs_aconnect_ws.pop("client", None)
 
     async def run():
         _exit_stack = AsyncExitStack()
-        _temp_client = httpx.AsyncClient(proxies=NO_PROXIES, **kwargs_async_client)
+        _temp_client = httpx.AsyncClient(mounts=NO_PROXIES)
         _ = await _exit_stack.enter_async_context(
             aconnect_ws(
                 client=_temp_client,
-                **kwargs_aconnect_ws,
+                url=aconnect_ws_url,
             )
         )
         queue.put("done")
@@ -95,32 +89,32 @@ class TestReverseWsProxy(AbstractTestProxy):
     @pytest.fixture()
     async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
-        test_server_fixture: TestServerFixture,
+        auto_server_fixture: AutoServerFixture,
     ) -> Tool4TestFixture:
         """目标服务器请参考`tests.app.echo_ws_app.get_app`."""
         echo_ws_test_model = get_ws_test_app()
         echo_ws_app = echo_ws_test_model.app
         echo_ws_get_request = echo_ws_test_model.get_request
 
-        target_ws_server = await test_server_fixture(
+        target_ws_server = await auto_server_fixture(
             app=echo_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST
         )
 
         target_server_base_url = str(target_ws_server.contx_socket_url)
 
-        client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
+        client_for_conn_to_target_server = httpx.AsyncClient(mounts=NO_PROXIES)
 
         reverse_ws_app = get_reverse_ws_app(
             client=client_for_conn_to_target_server, base_url=target_server_base_url
         )
 
-        proxy_ws_server = await test_server_fixture(
+        proxy_ws_server = await auto_server_fixture(
             app=reverse_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST
         )
 
         proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
 
-        client_for_conn_to_proxy_server = httpx.AsyncClient(proxies=NO_PROXIES)
+        client_for_conn_to_proxy_server = httpx.AsyncClient(mounts=NO_PROXIES)
 
         return Tool4TestFixture(
             client_for_conn_to_target_server=client_for_conn_to_target_server,
@@ -189,18 +183,11 @@ class TestReverseWsProxy(AbstractTestProxy):
         # 是因为这里已经有现成的target server，放在这里测试可以节省启动服务器时间
 
         aconnect_ws_subprocess_queue: "Queue[str]" = Queue()
-
-        kwargs_async_client = {"proxies": NO_PROXIES}
-        kwargs_aconnect_ws = {"url": proxy_server_base_url + "do_nothing"}
-        kwargs = {
-            "kwargs_async_client": kwargs_async_client,
-            "kwargs_aconnect_ws": kwargs_aconnect_ws,
-        }
+        aconnect_ws_url = proxy_server_base_url + "do_nothing"
 
         aconnect_ws_subprocess = Process(
             target=_subprocess_run_httpx_ws,
-            args=(aconnect_ws_subprocess_queue,),
-            kwargs=kwargs,
+            args=(aconnect_ws_subprocess_queue, aconnect_ws_url),
         )
         aconnect_ws_subprocess.start()
 
@@ -246,13 +233,13 @@ class TestReverseWsProxy(AbstractTestProxy):
             await anyio.sleep(0.1)
         target_server_base_url = subprocess_queue.get()
 
-        client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
+        client_for_conn_to_target_server = httpx.AsyncClient(mounts=NO_PROXIES)
 
         reverse_ws_app = get_reverse_ws_app(
             client=client_for_conn_to_target_server, base_url=target_server_base_url
         )
 
-        async with TestServer(
+        async with AutoServer(
             app=reverse_ws_app,
             port=DEFAULT_PORT,
             host=DEFAULT_HOST,
@@ -261,10 +248,10 @@ class TestReverseWsProxy(AbstractTestProxy):
 
             async with aconnect_ws(
                 proxy_server_base_url + "do_nothing",
-                httpx.AsyncClient(proxies=NO_PROXIES),
+                httpx.AsyncClient(mounts=NO_PROXIES),
             ) as ws0, aconnect_ws(
                 proxy_server_base_url + "do_nothing",
-                httpx.AsyncClient(proxies=NO_PROXIES),
+                httpx.AsyncClient(mounts=NO_PROXIES),
             ) as ws1:
                 # force shutdown target server
                 target_ws_server_subprocess.terminate()

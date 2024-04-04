@@ -213,7 +213,7 @@ class _HypercornServer:
         )
 
 
-class TestServer:
+class AutoServer:
     """An AsyncContext to launch and shutdown Hypercorn or Uvicorn server automatically."""
 
     def __init__(

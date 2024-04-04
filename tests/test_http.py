@@ -32,7 +32,10 @@ class TestReverseHttpProxy(AbstractTestProxy):
     ) -> Tool4TestFixture:
         """目标服务器请参考`tests.app.echo_http_app.get_app`."""
         client_for_conn_to_target_server = httpx.AsyncClient(
-            app=echo_http_test_model.app, base_url=DEFAULT_TARGET_SERVER_BASE_URL
+            transport=httpx.ASGITransport(
+                echo_http_test_model.app  # pyright: ignore[reportArgumentType]
+            ),
+            base_url=DEFAULT_TARGET_SERVER_BASE_URL,
         )
 
         reverse_http_app = await reverse_http_app_fct(
@@ -41,7 +44,10 @@ class TestReverseHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=reverse_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=httpx.ASGITransport(
+                reverse_http_app  # pyright: ignore[reportArgumentType]
+            ),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         get_request = echo_http_test_model.get_request
@@ -198,7 +204,10 @@ class TestReverseHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=reverse_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=httpx.ASGITransport(
+                reverse_http_app  # pyright: ignore[reportArgumentType]
+            ),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         r = await client_for_conn_to_proxy_server.get(DEFAULT_PROXY_SERVER_BASE_URL)
@@ -233,9 +242,9 @@ class TestReverseHttpProxy(AbstractTestProxy):
         assert not client_for_conn_to_proxy_server.cookies
 
         # check if cookie is not leaked
+        client_for_conn_to_proxy_server.cookies.set("a", "b")
         r = await client_for_conn_to_proxy_server.get(
-            proxy_server_base_url + "get/cookies",
-            cookies={"a": "b"},
+            proxy_server_base_url + "get/cookies"
         )
         assert "foo" not in r.json()  # not leaked
         assert r.json()["a"] == "b"  # send cookies normally
@@ -252,7 +261,10 @@ class TestForwardHttpProxy(AbstractTestProxy):
     ) -> Tool4TestFixture:
         """目标服务器请参考`tests.app.echo_http_app.get_app`."""
         client_for_conn_to_target_server = httpx.AsyncClient(
-            app=echo_http_test_model.app, base_url=DEFAULT_TARGET_SERVER_BASE_URL
+            transport=httpx.ASGITransport(
+                echo_http_test_model.app  # pyright: ignore[reportArgumentType]
+            ),
+            base_url=DEFAULT_TARGET_SERVER_BASE_URL,
         )
 
         forward_http_app = await forward_http_app_fct(
@@ -260,7 +272,10 @@ class TestForwardHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=forward_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=httpx.ASGITransport(
+                forward_http_app  # pyright: ignore[reportArgumentType]
+            ),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         get_request = echo_http_test_model.get_request
@@ -310,7 +325,10 @@ class TestForwardHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=forward_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=httpx.ASGITransport(
+                forward_http_app  # pyright: ignore[reportArgumentType]
+            ),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         # 错误的无法发出请求的URL
@@ -356,7 +374,10 @@ class TestForwardHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=forward_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=httpx.ASGITransport(
+                forward_http_app  # pyright: ignore[reportArgumentType]
+            ),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         r = await client_for_conn_to_proxy_server.get(
@@ -385,7 +406,9 @@ class TestForwardHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=forward_http_app,
+            transport=httpx.ASGITransport(
+                forward_http_app
+            ),  # pyright: ignore[reportArgumentType]
             base_url=proxy_server_base_url,
             http2=True,
             http1=False,
