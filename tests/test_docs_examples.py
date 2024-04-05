@@ -23,8 +23,8 @@ def test_forward_http_proxy() -> None:
     app = FastAPI(lifespan=close_proxy_event)
 
     @app.get("/{path:path}")
-    async def _(request: Request, path: str = ""):
-        return await proxy.proxy(request=request, path=path)
+    async def _(request: Request):
+        return await proxy.proxy(request=request)
 
     # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
     # visit the app: `http://127.0.0.1:8000/http://www.example.com`
@@ -52,8 +52,8 @@ def test_reverse_http_proxy() -> None:
     app = FastAPI(lifespan=close_proxy_event)
 
     @app.get("/{path:path}")  # (2)!
-    async def _(request: Request, path: str = ""):
-        return await proxy.proxy(request=request, path=path)  # (3)!
+    async def _(request: Request):
+        return await proxy.proxy(request=request)  # (3)!
 
     # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
     # visit the app: `http://127.0.0.1:8000/`
@@ -62,11 +62,7 @@ def test_reverse_http_proxy() -> None:
     """ 1. lifespan please refer to [starlette/lifespan](https://www.starlette.io/lifespan/)
     2. `{path:path}` is the key.<br>
         It allows the app to accept all path parameters.<br>
-        visit <https://www.starlette.io/routing/#path-parameters> for more info.
-    3. !!! info
-        In fact, you only need to pass the `request: Request` argument.<br>
-        `fastapi_proxy_lib` can automatically get the `path` from `request`.<br>
-        Explicitly pointing it out here is just to remind you not to forget to specify `{path:path}`. """
+        visit <https://www.starlette.io/routing/#path-parameters> for more info. """
 
 
 def test_reverse_ws_proxy() -> None:
@@ -90,8 +86,8 @@ def test_reverse_ws_proxy() -> None:
     app = FastAPI(lifespan=close_proxy_event)
 
     @app.websocket("/{path:path}")
-    async def _(websocket: WebSocket, path: str = ""):
-        return await proxy.proxy(websocket=websocket, path=path)
+    async def _(websocket: WebSocket):
+        return await proxy.proxy(websocket=websocket)
 
     # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
     # visit the app: `ws://127.0.0.1:8000/`

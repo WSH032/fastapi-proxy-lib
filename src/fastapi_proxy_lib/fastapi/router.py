@@ -63,7 +63,7 @@ def _http_register_router(
     @router.patch("/{path:path}", **kwargs)
     @router.trace("/{path:path}", **kwargs)
     async def http_proxy(  # pyright: ignore[reportUnusedFunction]
-        request: Request, path: str = ""
+        request: Request,
     ) -> Response:
         """HTTP proxy endpoint.
 
@@ -74,7 +74,7 @@ def _http_register_router(
         Returns:
             The response from target server.
         """
-        return await proxy.proxy(request=request, path=path)
+        return await proxy.proxy(request=request)
 
 
 def _ws_register_router(
@@ -96,7 +96,7 @@ def _ws_register_router(
 
     @router.websocket("/{path:path}", **kwargs)
     async def ws_proxy(  # pyright: ignore[reportUnusedFunction]
-        websocket: WebSocket, path: str = ""
+        websocket: WebSocket,
     ) -> Union[Response, Literal[False]]:
         """WebSocket proxy endpoint.
 
@@ -111,7 +111,7 @@ def _ws_register_router(
             If the establish websocket connection successfully:
                 - Will run forever until the connection is closed. Then return False.
         """
-        return await proxy.proxy(websocket=websocket, path=path)
+        return await proxy.proxy(websocket=websocket)
 
 
 class RouterHelper:

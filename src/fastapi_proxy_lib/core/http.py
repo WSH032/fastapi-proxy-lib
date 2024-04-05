@@ -327,8 +327,8 @@ class ReverseHttpProxy(BaseHttpProxy):
     app = FastAPI(lifespan=close_proxy_event)
 
     @app.get("/{path:path}")  # (2)!
-    async def _(request: Request, path: str = ""):
-        return await proxy.proxy(request=request, path=path)  # (3)!
+    async def _(request: Request):
+        return await proxy.proxy(request=request)  # (3)!
 
     # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
     # visit the app: `http://127.0.0.1:8000/`
@@ -339,10 +339,6 @@ class ReverseHttpProxy(BaseHttpProxy):
     2. `{path:path}` is the key.<br>
         It allows the app to accept all path parameters.<br>
         visit <https://www.starlette.io/routing/#path-parameters> for more info.
-    3. !!! info
-        In fact, you only need to pass the `request: Request` argument.<br>
-        `fastapi_proxy_lib` can automatically get the `path` from `request`.<br>
-        Explicitly pointing it out here is just to remind you not to forget to specify `{path:path}`.
     '''
 
     client: httpx.AsyncClient
@@ -376,15 +372,12 @@ class ReverseHttpProxy(BaseHttpProxy):
 
     @override
     async def proxy(  # pyright: ignore [reportIncompatibleMethodOverride]
-        self, *, request: StarletteRequest, path: Optional[str] = None
+        self, *, request: StarletteRequest
     ) -> StarletteResponse:
         """Send request to target server.
 
         Args:
             request: `starlette.requests.Request`
-            path: The path params of request, which means the path params of base url.<br>
-                If None, will get it from `request.path_params`.<br>
-                **Usually, you don't need to pass this argument**.
 
         Returns:
             The response from target server.
@@ -392,9 +385,7 @@ class ReverseHttpProxy(BaseHttpProxy):
         base_url = self.base_url
 
         # 只取第一个路径参数。注意，我们允许没有路径参数，这代表直接请求
-        path_param: str = (
-            path if path is not None else next(iter(request.path_params.values()), "")
-        )
+        path_param: str = next(iter(request.path_params.values()), "")
 
         # 将路径参数拼接到目标url上
         # e.g: "https://www.example.com/p0/" + "p1"
@@ -462,8 +453,8 @@ class ForwardHttpProxy(BaseHttpProxy):
     app = FastAPI(lifespan=close_proxy_event)
 
     @app.get("/{path:path}")
-    async def _(request: Request, path: str = ""):
-        return await proxy.proxy(request=request, path=path)
+    async def _(request: Request):
+        return await proxy.proxy(request=request)
 
     # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
     # visit the app: `http://127.0.0.1:8000/http://www.example.com`
@@ -502,15 +493,11 @@ class ForwardHttpProxy(BaseHttpProxy):
         self,
         *,
         request: StarletteRequest,
-        path: Optional[str] = None,
     ) -> StarletteResponse:
         """Send request to target server.
 
         Args:
             request: `starlette.requests.Request`
-            path: The path params of request, which means the full url of target server.<br>
-                If None, will get it from `request.path_params`.<br>
-                **Usually, you don't need to pass this argument**.
 
         Returns:
             The response from target server.
@@ -518,9 +505,8 @@ class ForwardHttpProxy(BaseHttpProxy):
         proxy_filter = self.proxy_filter
 
         # 只取第一个路径参数
-        path_param: str = (
-            next(iter(request.path_params.values()), "") if path is None else path
-        )
+        path_param: str = next(iter(request.path_params.values()), "")
+
         # 如果没有路径参数，即在正向代理中未指定目标url，则返回400
         if path_param == "":
             error = _BadTargetUrlError("Must provide target url.")

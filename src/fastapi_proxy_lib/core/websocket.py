@@ -671,8 +671,8 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
     app = FastAPI(lifespan=close_proxy_event)
 
     @app.websocket("/{path:path}")
-    async def _(websocket: WebSocket, path: str = ""):
-        return await proxy.proxy(websocket=websocket, path=path)
+    async def _(websocket: WebSocket):
+        return await proxy.proxy(websocket=websocket)
 
     # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
     # visit the app: `ws://127.0.0.1:8000/`
@@ -737,15 +737,12 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
 
     @override
     async def proxy(  # pyright: ignore [reportIncompatibleMethodOverride]
-        self, *, websocket: starlette_ws.WebSocket, path: Optional[str] = None
+        self, *, websocket: starlette_ws.WebSocket
     ) -> Union[Literal[False], StarletteResponse]:
         """Establish websocket connection for both client and target_url, then pass messages between them.
 
         Args:
             websocket: The client websocket requests.
-            path: The path params of websocket request, which means the path params of base url.<br>
-                If None, will get it from `websocket.path_params`.<br>
-                **Usually, you don't need to pass this argument**.
 
         Returns:
             If the establish websocket connection unsuccessfully:
@@ -757,9 +754,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
         base_url = self.base_url
 
         # 只取第一个路径参数。注意，我们允许没有路径参数，这代表直接请求
-        path_param: str = (
-            path if path is not None else next(iter(websocket.path_params.values()), "")
-        )
+        path_param: str = next(iter(websocket.path_params.values()), "")
 
         # 将路径参数拼接到目标url上
         # e.g: "https://www.example.com/p0/" + "p1"
