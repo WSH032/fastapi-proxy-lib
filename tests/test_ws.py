@@ -51,6 +51,7 @@ def _subprocess_run_echo_ws_server(queue: "Queue[str]"):
             while True:  # run forever
                 await anyio.sleep(0.1)
 
+    # It's not proxy app server for which we test, so it's ok to not use trio backend
     anyio.run(run)
 
 
@@ -63,22 +64,29 @@ def _subprocess_run_httpx_ws(
     Args:
         queue: The queue for subprocess to put something for flag of ws connection established.
         aconnect_ws_url: The websocket url for aconnect_ws.
+            will add "receive_and_send_text_once_without_closing" to the url.
     """
 
     async def run():
         _exit_stack = AsyncExitStack()
         _temp_client = httpx.AsyncClient(mounts=NO_PROXIES)
-        _ = await _exit_stack.enter_async_context(
+        ws = await _exit_stack.enter_async_context(
             aconnect_ws(
                 client=_temp_client,
-                url=aconnect_ws_url,
+                url=aconnect_ws_url + "receive_and_send_text_once_without_closing",
             )
         )
+        # make sure ws is connected
+        msg = "foo"
+        await ws.send_text(msg)
+        await ws.receive_text()
+        # use queue to notify the connection established
         queue.put("done")
         queue.close()
         while True:  # run forever
             await anyio.sleep(0.1)
 
+    # It's not proxy app server for which we test, so it's ok to not use trio backend
     anyio.run(run)
 
 
@@ -183,7 +191,7 @@ class TestReverseWsProxy(AbstractTestProxy):
         # 是因为这里已经有现成的target server，放在这里测试可以节省启动服务器时间
 
         aconnect_ws_subprocess_queue: "Queue[str]" = Queue()
-        aconnect_ws_url = proxy_server_base_url + "do_nothing"
+        aconnect_ws_url = proxy_server_base_url
 
         aconnect_ws_subprocess = Process(
             target=_subprocess_run_httpx_ws,
@@ -247,12 +255,19 @@ class TestReverseWsProxy(AbstractTestProxy):
             proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
 
             async with aconnect_ws(
-                proxy_server_base_url + "do_nothing",
+                proxy_server_base_url + "echo_text",
                 httpx.AsyncClient(mounts=NO_PROXIES),
             ) as ws0, aconnect_ws(
-                proxy_server_base_url + "do_nothing",
+                proxy_server_base_url + "echo_text",
                 httpx.AsyncClient(mounts=NO_PROXIES),
             ) as ws1:
+                # make sure ws is connected
+                msg = "foo"
+                await ws0.send_text(msg)
+                assert msg == await ws0.receive_text()
+                await ws1.send_text(msg)
+                assert msg == await ws1.receive_text()
+
                 # force shutdown target server
                 target_ws_server_subprocess.terminate()
                 target_ws_server_subprocess.kill()

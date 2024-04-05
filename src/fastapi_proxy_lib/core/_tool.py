@@ -1,13 +1,11 @@
 """The utils tools for both http proxy and websocket proxy."""
 
 import ipaddress
-import logging
 import warnings
 from functools import lru_cache
 from textwrap import dedent
 from typing import (
     Any,
-    Iterable,
     Mapping,
     Optional,
     Protocol,
@@ -17,7 +15,6 @@ from typing import (
 )
 
 import httpx
-from starlette import status
 from starlette.background import BackgroundTask as BackgroundTask_t
 from starlette.datastructures import (
     Headers as StarletteHeaders,
@@ -26,13 +23,11 @@ from starlette.datastructures import (
     MutableHeaders as StarletteMutableHeaders,
 )
 from starlette.responses import JSONResponse
-from starlette.types import Scope
 from typing_extensions import deprecated, overload
 
 __all__ = (
     "check_base_url",
     "return_err_msg_response",
-    "check_http_version",
     "BaseURLError",
     "ErrMsg",
     "ErrRseponseJson",
@@ -127,10 +122,6 @@ class BaseURLError(ValueError):
 
 class _RejectedProxyRequestError(RuntimeError):
     """Should be raised when reject proxy request."""
-
-
-class _UnsupportedHttpVersionError(RuntimeError):
-    """Unsupported http version."""
 
 
 #################### Tools ####################
@@ -335,35 +326,6 @@ def return_err_msg_response(
         headers=headers,
         background=background,
     )
-
-
-def check_http_version(
-    scope: Scope, supported_versions: Iterable[str]
-) -> Union[JSONResponse, None]:
-    """Check whether the http version of scope is in supported_versions.
-
-    Args:
-        scope: asgi scope dict.
-        supported_versions: The supported http versions.
-
-    Returns:
-        If the http version of scope is not in supported_versions, return a JSONResponse with status_code=505,
-        else return None.
-    """
-    # https://asgi.readthedocs.io/en/latest/specs/www.html#http-connection-scope
-    # https://asgi.readthedocs.io/en/latest/specs/www.html#websocket-connection-scope
-    http_version: str = scope.get("http_version", "")
-    # 如果明确指定了http版本（即不是""），但不在支持的版本内，则返回505
-    if http_version not in supported_versions and http_version != "":
-        error = _UnsupportedHttpVersionError(
-            f"The request http version is {http_version}, but we only support {supported_versions}."
-        )
-        # TODO: 或许可以logging记录下 scope.get("client") 的值
-        return return_err_msg_response(
-            error,
-            status_code=status.HTTP_505_HTTP_VERSION_NOT_SUPPORTED,
-            logger=logging.info,
-        )
 
 
 def default_proxy_filter(url: httpx.URL) -> Union[None, str]:

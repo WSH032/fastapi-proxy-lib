@@ -258,6 +258,7 @@ class AutoServer:
 
         self._exit_stack = AsyncExitStack()
         await self._exit_stack.enter_async_context(self.server)
+        await anyio.sleep(0.5)  # XXX, HACK: wait for server to start
         return self
 
     async def __aexit__(self, *_: Any, **__: Any) -> None:

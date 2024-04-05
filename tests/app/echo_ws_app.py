@@ -87,13 +87,16 @@ def get_app() -> AppDataclass4Test:  # noqa: C901, PLR0915
 
         await websocket.close()
 
-    @app.websocket("/do_nothing")
+    @app.websocket("/receive_and_send_text_once_without_closing")
     async def do_nothing(websocket: WebSocket):
-        """Will do nothing except `websocket.accept()`."""
+        """Will receive text once and send it back once, without closing ws."""
         nonlocal test_app_dataclass
         test_app_dataclass.request_dict["request"] = websocket
 
         await websocket.accept()
+
+        recev = await websocket.receive_text()
+        await websocket.send_text(recev)
 
     return test_app_dataclass
 

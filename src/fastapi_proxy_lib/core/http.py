@@ -31,7 +31,6 @@ from ._tool import (
     _RejectedProxyRequestError,  # pyright: ignore [reportPrivateUsage]  # 允许使用本项目内部的私有成员
     change_necessary_client_header_for_httpx,
     check_base_url,
-    check_http_version,
     return_err_msg_response,
     warn_for_none_filter,
 )
@@ -80,10 +79,6 @@ class _ReverseProxyServerError(RuntimeError):
 # https://developer.mozilla.org/docs/Web/HTTP/Methods
 _NON_REQUEST_BODY_METHODS = ("GET", "HEAD", "OPTIONS", "TRACE")
 """The http methods that should not contain request body."""
-
-# https://asgi.readthedocs.io/en/latest/specs/www.html#http-connection-scope
-SUPPORTED_HTTP_VERSIONS = ("1.0", "1.1")
-"""The http versions that we supported now. It depends on `httpx`."""
 
 # https://www.python-httpx.org/exceptions/
 _400_ERROR_NEED_TO_BE_CATCHED_IN_FORWARD_PROXY = (
@@ -227,8 +222,6 @@ class BaseHttpProxy(BaseProxyModel):
     ) -> StarletteResponse:
         """Change request headers and send request to target url.
 
-        - The http version of request must be in [`SUPPORTED_HTTP_VERSIONS`][fastapi_proxy_lib.core.http.SUPPORTED_HTTP_VERSIONS].
-
         Args:
             request: the original client request.
             target_url: target url that request will be sent to.
@@ -238,10 +231,6 @@ class BaseHttpProxy(BaseProxyModel):
         """
         client = self.client
         follow_redirects = self.follow_redirects
-
-        check_result = check_http_version(request.scope, SUPPORTED_HTTP_VERSIONS)
-        if check_result is not None:
-            return check_result
 
         # 将请求头中的host字段改为目标url的host
         # 同时强制移除"keep-alive"字段和添加"keep-alive"值到"connection"字段中保持连接
