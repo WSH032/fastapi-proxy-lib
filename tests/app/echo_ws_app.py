@@ -4,6 +4,7 @@
 
 import anyio
 from fastapi import FastAPI, WebSocket
+from starlette.responses import JSONResponse
 from starlette.websockets import WebSocketDisconnect
 
 from .tool import AppDataclass4Test, RequestDict
@@ -53,8 +54,8 @@ def get_app() -> AppDataclass4Test:  # noqa: C901, PLR0915
             except WebSocketDisconnect:
                 break
 
-    @app.websocket("/accept_foo_subprotocol")
-    async def accept_foo_subprotocol(websocket: WebSocket):
+    @app.websocket("/accept_foo_subprotocol_and_foo_bar_header")
+    async def accept_foo_subprotocol_and_foo_bar_header(websocket: WebSocket):
         """When client send subprotocols request, if subprotocols contain "foo", will accept it."""
         nonlocal test_app_dataclass
         test_app_dataclass.request_dict["request"] = websocket
@@ -65,19 +66,20 @@ def get_app() -> AppDataclass4Test:  # noqa: C901, PLR0915
         else:
             accepted_subprotocol = None
 
-        await websocket.accept(subprotocol=accepted_subprotocol)
+        await websocket.accept(
+            subprotocol=accepted_subprotocol, headers=[(b"foo", b"bar")]
+        )
 
         await websocket.close()
 
-    @app.websocket("/just_close_with_1001")
-    async def just_close_with_1001(websocket: WebSocket):
-        """Just do nothing after `accept`, then close ws with 1001 code."""
+    @app.websocket("/just_close_with_1002_and_foo")
+    async def just_close_with_1002_and_foo(websocket: WebSocket):
+        """Just do nothing after `accept`, then close ws with 1001 code and 'foo'."""
         nonlocal test_app_dataclass
         test_app_dataclass.request_dict["request"] = websocket
 
         await websocket.accept()
-        await anyio.sleep(0.3)
-        await websocket.close(1001)
+        await websocket.close(1002, "foo")
 
     @app.websocket("/reject_handshake")
     async def reject_handshake(websocket: WebSocket):
@@ -87,16 +89,33 @@ def get_app() -> AppDataclass4Test:  # noqa: C901, PLR0915
 
         await websocket.close()
 
+    @app.websocket("/send_denial_response_400_foo_bar_header_and_json_body")
+    async def send_denial_response_400_foo_bar_header_and_json_body(
+        websocket: WebSocket,
+    ):
+        """Will reject ws request by just calling `websocket.close()`."""
+        nonlocal test_app_dataclass
+        test_app_dataclass.request_dict["request"] = websocket
+
+        denial_resp = JSONResponse({"foo": "bar"}, 400, headers={"foo": "bar"})
+        await websocket.send_denial_response(denial_resp)
+
     @app.websocket("/receive_and_send_text_once_without_closing")
     async def do_nothing(websocket: WebSocket):
-        """Will receive text once and send it back once, without closing ws."""
+        """Will receive text once and send it back once, without closing ws.
+
+        Note: user must close the ws manually, and call `websocket.state.closing.set()`.
+        """
         nonlocal test_app_dataclass
+        websocket.state.closing = anyio.Event()
         test_app_dataclass.request_dict["request"] = websocket
 
         await websocket.accept()
 
         recev = await websocket.receive_text()
         await websocket.send_text(recev)
+
+        await websocket.state.closing.wait()
 
     return test_app_dataclass
 

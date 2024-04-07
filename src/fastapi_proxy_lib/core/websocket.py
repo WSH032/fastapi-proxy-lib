@@ -9,7 +9,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     List,
-    Literal,
     NoReturn,
     Optional,
     Union,
@@ -20,9 +19,10 @@ import anyio.abc
 import httpx
 import httpx_ws
 import starlette.websockets as starlette_ws
+import wsproto
 from starlette import status as starlette_status
-from starlette.responses import Response as StarletteResponse
-from starlette.responses import StreamingResponse
+from starlette.background import BackgroundTask
+from starlette.responses import Response
 from starlette.types import Scope
 from typing_extensions import override
 from wsproto.events import BytesMessage as WsprotoBytesMessage
@@ -85,7 +85,10 @@ _WsDisconnectType = Union[
     starlette_ws.WebSocketDisconnect, httpx_ws.WebSocketDisconnect
 ]
 
-_WsDisconnectErrors = (starlette_ws.WebSocketDisconnect, httpx_ws.WebSocketDisconnect)
+_WsDisconnectDequqType = Union[
+    _WsDisconnectType,  # Exception that contains closing info
+    Exception,  # other Exception
+]
 
 #################### Constant ####################
 
@@ -257,11 +260,7 @@ async def _starlette_ws_send_bytes_or_str(
         data: The data to send.
 
     Raises:
-        When websocket has been disconnected, there may be exceptions raised, or maybe not.
-        # https://github.com/encode/uvicorn/discussions/2137
-        For Uvicorn backend:
-        - `wsproto`: nothing raised.
-        - `websockets`: websockets.exceptions.ConnectionClosedError
+        When websocket has been disconnected, will raise `starlette_ws.WebSocketDisconnect(1006)`.
 
     """
     # HACK: make pyright happy
@@ -277,7 +276,7 @@ async def _starlette_ws_send_bytes_or_str(
 async def _wait_client_then_send_to_server(
     client_ws: starlette_ws.WebSocket,
     server_ws: httpx_ws.AsyncWebSocketSession,
-    ws_disconnect_deque: "deque[_WsDisconnectType]",
+    ws_disconnect_deque: "deque[_WsDisconnectDequqType]",
     task_group: anyio.abc.TaskGroup,
 ) -> None:
     """Receive data from client, then send to target server.
@@ -285,12 +284,12 @@ async def _wait_client_then_send_to_server(
     Args:
         client_ws: The websocket which receive data of client.
         server_ws: The websocket which send data to target server.
-        ws_disconnect_deque: A deque to store the `WebSocketDisconnect` exception.
+        ws_disconnect_deque: A deque to store Exception.
         task_group: The task group which run this task.
-            if a `WebSocketDisconnect` is raised, will cancel the task group.
+            if catch a Exception, will cancel the task group.
 
     Returns:
-        None: Always run forever, except encounter `WebSocketDisconnect`.
+        None: Always run forever, except encounter Exception.
 
     Raises:
         error for receiving: refer to `_starlette_ws_receive_bytes_or_str`.
@@ -300,16 +299,15 @@ async def _wait_client_then_send_to_server(
         while True:
             receive = await _starlette_ws_receive_bytes_or_str(client_ws)
             await _httpx_ws_send_bytes_or_str(server_ws, receive)
-    except _WsDisconnectErrors as ws_disconnect:
+    except Exception as ws_disconnect:
         task_group.cancel_scope.cancel()
-        with anyio.CancelScope(shield=True):
-            ws_disconnect_deque.append(ws_disconnect)
+        ws_disconnect_deque.append(ws_disconnect)
 
 
 async def _wait_server_then_send_to_client(
     client_ws: starlette_ws.WebSocket,
     server_ws: httpx_ws.AsyncWebSocketSession,
-    ws_disconnect_deque: "deque[_WsDisconnectType]",
+    ws_disconnect_deque: "deque[_WsDisconnectDequqType]",
     task_group: anyio.abc.TaskGroup,
 ) -> None:
     """Receive data from target server, then send to client.
@@ -317,12 +315,12 @@ async def _wait_server_then_send_to_client(
     Args:
         client_ws: The websocket which receive data of client.
         server_ws: The websocket which send data to target server.
-        ws_disconnect_deque: A deque to store the `WebSocketDisconnect` exception.
+        ws_disconnect_deque: A deque to store Exception.
         task_group: The task group which run this task.
-            if a `WebSocketDisconnect` is raised, will cancel the task group.
+            if catch a Exception, will cancel the task group.
 
     Returns:
-        None: Always run forever, except encounter `WebSocketDisconnect`.
+        None: Always run forever, except encounter Exception.
 
     Raises:
         error for receiving: refer to `_httpx_ws_receive_bytes_or_str`.
@@ -332,70 +330,135 @@ async def _wait_server_then_send_to_client(
         while True:
             receive = await _httpx_ws_receive_bytes_or_str(server_ws)
             await _starlette_ws_send_bytes_or_str(client_ws, receive)
-    except _WsDisconnectErrors as ws_disconnect:
+    except Exception as ws_disconnect:
         task_group.cancel_scope.cancel()
-        with anyio.CancelScope(shield=True):
-            ws_disconnect_deque.append(ws_disconnect)
+        ws_disconnect_deque.append(ws_disconnect)
 
 
-async def _close_ws_abnormally(
+async def _close_ws(  # noqa: C901, PLR0912
     client_ws: starlette_ws.WebSocket,
     server_ws: httpx_ws.AsyncWebSocketSession,
-    exc: BaseException,
-) -> None:
-    """Log the exception and close both websockets with code `1011`.
+    ws_disconnect_deque: "deque[_WsDisconnectDequqType]",
+    caught_tg_exc: Optional[BaseException],
+):
+    ws_disconnect_tuple = tuple(ws_disconnect_deque)
 
-    Args:
-        exc: The exception propagated by task group.
-        client_ws: client_ws
-        server_ws: server_ws
-    """
-    client_info = client_ws.client
+    client_disc_errs: List[starlette_ws.WebSocketDisconnect] = []
+    not_client_disc_errs: List[Exception] = []
+    for e in ws_disconnect_tuple:
+        if isinstance(e, starlette_ws.WebSocketDisconnect):
+            client_disc_errs.append(e)
+        else:
+            not_client_disc_errs.append(e)
+
+    server_disc_errs: List[httpx_ws.WebSocketDisconnect] = []
+    not_server_disc_errs: List[Exception] = []
+    for e in ws_disconnect_tuple:
+        if isinstance(e, httpx_ws.WebSocketDisconnect):
+            server_disc_errs.append(e)
+        else:
+            not_server_disc_errs.append(e)
+
+    is_canceled = isinstance(caught_tg_exc, anyio.get_cancelled_exc_class())
+
     client_host, client_port = (
-        (client_info.host, client_info.port)
-        if client_info is not None
+        (client_ws.client.host, client_ws.client.port)
+        if client_ws.client is not None
         else (None, None)
     )
-    # we don't use `dedent` here for better performance
-    msg = f"""\
-An error occurred in the websocket proxy connection for {client_host}:{client_port}.
-errors: {exc!r}\
-"""
-    logging.warning(msg)
 
-    # Why we use `1011` code, refer to:
-    #   https://developer.mozilla.org/zh-CN/docs/Web/API/CloseEvent
-    #   https://datatracker.ietf.org/doc/html/rfc6455#section-7.4.1
-    await client_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
-    await server_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
-
-
-async def _close_ws_normally(
-    client_ws: starlette_ws.WebSocket,
-    server_ws: httpx_ws.AsyncWebSocketSession,
-    ws_disconnect_deque: "deque[_WsDisconnectType]",
-) -> None:
-    deque_len = len(ws_disconnect_deque)
-    if deque_len == 1:
-        ws_disconnect = ws_disconnect_deque[0]
-        if isinstance(ws_disconnect, starlette_ws.WebSocketDisconnect):
-            await server_ws.close(ws_disconnect.code, ws_disconnect.reason)
+    # Implement reference:
+    # https://github.com/encode/starlette/blob/4e453ce91940cc7c995e6c728e3fdf341c039056/starlette/websockets.py#L64-L112
+    client_ws_closed_state = {
+        starlette_ws.WebSocketState.DISCONNECTED,
+        starlette_ws.WebSocketState.RESPONSE,
+    }
+    if (
+        client_ws.application_state not in client_ws_closed_state
+        and client_ws.client_state not in client_ws_closed_state
+    ):
+        if server_disc_errs:
+            server_disc = server_disc_errs[0]
+            await client_ws.close(server_disc.code, server_disc.reason)
+        elif is_canceled:
+            await client_ws.close(starlette_status.WS_1001_GOING_AWAY)
         else:
-            await client_ws.close(ws_disconnect.code, ws_disconnect.reason)
-    elif deque_len == 2:
-        # If both client and server are disconnected, we do nothing.
-        ws_disc_type = {type(ws_disc) for ws_disc in ws_disconnect_deque}
-        assert ws_disc_type == {
-            starlette_ws.WebSocketDisconnect,
-            httpx_ws.WebSocketDisconnect,
-        }
-        logging.info(
-            f"Both client and server received disconnect. {ws_disconnect_deque!r}"
+            await client_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
+            logging.warning(
+                f"[{client_host}:{client_port}] Client websocket closed abnormally during proxying. "
+                f"Catch tasks exceptions: {not_server_disc_errs!r} "
+                f"Catch task group exceptions: {caught_tg_exc!r}"
+            )
+
+    # Implement reference:
+    # https://github.com/frankie567/httpx-ws/blob/940c9adb3afee9dd7c8b95514bdf6444673e4820/httpx_ws/_api.py#L928-L931
+    if server_ws.connection.state not in {
+        wsproto.connection.ConnectionState.CLOSED,
+        wsproto.connection.ConnectionState.LOCAL_CLOSING,
+    }:
+        if client_disc_errs:
+            client_disc = client_disc_errs[0]
+            await server_ws.close(client_disc.code, client_disc.reason)
+        elif is_canceled:
+            await server_ws.close(starlette_status.WS_1001_GOING_AWAY)
+        else:
+            # If remote server has closed normally, here we just close local ws.
+            # It's normal, so we don't need warning.
+            if (
+                server_ws.connection.state
+                != wsproto.connection.ConnectionState.REMOTE_CLOSING
+            ):
+                logging.warning(
+                    f"[{client_host}:{client_port}] Server websocket closed abnormally during proxying. "
+                    f"Catch tasks exceptions: {not_client_disc_errs!r} "
+                    f"Catch task group exceptions: {caught_tg_exc!r}"
+                )
+            await server_ws.close(starlette_status.WS_1011_INTERNAL_ERROR)
+
+
+async def _handle_ws_upgrade_error(
+    client_ws: starlette_ws.WebSocket,
+    background: BackgroundTask,
+    ws_upgrade_exc: httpx_ws.WebSocketUpgradeError,
+) -> None:
+    proxy_res = ws_upgrade_exc.response
+    # https://asgi.readthedocs.io/en/latest/extensions.html#websocket-denial-response
+    # https://github.com/encode/starlette/blob/4e453ce91940cc7c995e6c728e3fdf341c039056/starlette/websockets.py#L207-L214
+    is_able_to_send_denial_response = "websocket.http.response" in client_ws.scope.get(
+        "extensions", {}
+    )
+
+    if is_able_to_send_denial_response:
+        # # XXX: Can not use send_denial_response with StreamingResponse
+        # # See: https://github.com/encode/starlette/discussions/2566
+        # denial_response = StreamingResponse(
+        #     content=proxy_res.aiter_raw(),
+        #     status_code=proxy_res.status_code,
+        #     headers=proxy_res.headers,
+        #     background=background,
+        # )
+
+        # # XXX: Unable to read the content of WebSocketUpgradeError.response
+        # # See: https://github.com/frankie567/httpx-ws/discussions/69
+        # content = await proxy_res.aread()
+
+        denial_response = Response(
+            content="",
+            status_code=proxy_res.status_code,
+            headers=proxy_res.headers,
+            background=background,
         )
+        await client_ws.send_denial_response(denial_response)
     else:
-        raise AssertionError(
-            f"There are too many WebSocketDisconnect in deque! {ws_disconnect_deque!r}"
+        msg = (
+            "Proxy websocket handshake failed, "
+            "but your ASGI server does not support sending denial response.\n"
+            f"Denial response: {proxy_res!r}"
         )
+        logging.warning(msg)
+        # we close before accept, then ASGI will send 403 to client
+        await client_ws.close()
+        await background()
 
 
 #################### # ####################
@@ -466,7 +529,7 @@ class BaseWebSocketProxy(BaseProxyModel):
         *,
         websocket: starlette_ws.WebSocket,
         target_url: httpx.URL,
-    ) -> Union[Literal[False], StarletteResponse]:
+    ) -> bool:
         """Establish websocket connection for both client and target_url, then pass messages between them.
 
         Args:
@@ -474,11 +537,7 @@ class BaseWebSocketProxy(BaseProxyModel):
             target_url: The url of target websocket server.
 
         Returns:
-            If the establish websocket connection unsuccessfully:
-                - Will call `websocket.close()` to send code `4xx`
-                - Then return a `StarletteResponse` from target server
-            If the establish websocket connection successfully:
-                - Will run forever until the connection is closed. Then return False.
+            bool: If handshake failed, return True. Else return False.
         """
         client = self.client
         follow_redirects = self.follow_redirects
@@ -535,41 +594,36 @@ class BaseWebSocketProxy(BaseProxyModel):
                 )
             )
         except httpx_ws.WebSocketUpgradeError as ws_upgrade_exc:
-            # 这个错误是在 httpx.stream 获取到响应后才返回的, 也就是说至少本服务器的网络应该是正常的
-            # 且对于反向ws代理来说，本服务器管理者有义务保证与目标服务器的连接是正常的
-            # 所以这里既有可能是客户端的错误，或者是目标服务器拒绝了连接
-            # TODO: 也有可能是本服务器的未知错误
-            proxy_res = ws_upgrade_exc.response
-
-            # NOTE: return 之前最好关闭websocket
-            # 不调用websocket.accept就发送关闭请求，uvicorn会自动发送403错误
-            await websocket.close()
-            # TODO: 连接失败的时候httpx_ws会自己关闭连接，但或许这里显式关闭会更好
-
-            # HACK: 这里的返回的响应其实uvicorn不会处理
-            return StreamingResponse(
-                content=proxy_res.aiter_raw(),
-                status_code=proxy_res.status_code,
-                headers=proxy_res.headers,
+            await _handle_ws_upgrade_error(
+                client_ws=websocket,
+                background=BackgroundTask(stack.aclose),
+                ws_upgrade_exc=ws_upgrade_exc,
             )
+            return True
 
         # NOTE: 对于反向代理服务器，我们不返回 "任何" "具体的内部" 错误信息给客户端，因为这可能涉及到服务器内部的信息泄露
 
         # NOTE: 请使用 with 语句来 "保证关闭" AsyncWebSocketSession
         async with stack:
-            # TODO: websocket.accept 中还有一个headers参数，但是httpx_ws不支持，考虑发起PR
-            # https://github.com/frankie567/httpx-ws/discussions/53
-
-            # FIXME: 调查缺少headers参数是否会引起问题，及是否会影响透明代理的无损转发性
+            proxy_ws_resp = proxy_ws.response
+            # TODO: Here is a typing issue of `httpx_ws`, we have to use `assert` to make pyright happy
+            # https://github.com/frankie567/httpx-ws/pull/54#pullrequestreview-1974062119
+            assert proxy_ws_resp is not None
+            headers = proxy_ws_resp.headers.copy()
+            # ASGI not allow the headers contains `sec-websocket-protocol` field
             # https://asgi.readthedocs.io/en/latest/specs/www.html#accept-send-event
-
-            # 这时候如果发生错误，退出时 stack 会自动关闭 httpx_ws 连接，所以这里不需要手动关闭
+            headers.pop("sec-websocket-protocol", None)
+            # XXX: uvicorn websockets implementation not allow contains multiple `Date` and `Server` field,
+            # only wsporoto can do so.
+            # https://github.com/encode/uvicorn/pull/1606
+            # https://github.com/python-websockets/websockets/issues/1226
+            headers.pop("Date", None)
+            headers.pop("Server", None)
             await websocket.accept(
-                subprotocol=proxy_ws.subprotocol
-                # headers=...
+                subprotocol=proxy_ws.subprotocol, headers=headers.raw
             )
 
-            ws_disconnect_deque: "deque[_WsDisconnectType]" = deque(maxlen=2)
+            ws_disconnect_deque: "deque[_WsDisconnectDequqType]" = deque()
             caught_tg_exc = None
             try:
                 async with anyio.create_task_group() as tg:
@@ -593,23 +647,13 @@ class BaseWebSocketProxy(BaseProxyModel):
                 caught_tg_exc = base_exc
                 raise  # NOTE: must raise again
             finally:
-                # NOTE: DO NOT use `return` in `finally` block
                 with anyio.CancelScope(shield=True):
-                    # If there are normal disconnection info,
-                    # we try to close the connection normally.
-                    if ws_disconnect_deque:
-                        await _close_ws_normally(
-                            client_ws=websocket,
-                            server_ws=proxy_ws,
-                            ws_disconnect_deque=ws_disconnect_deque,
-                        )
-                    else:
-                        caught_tg_exc = caught_tg_exc or RuntimeError("Unknown error")
-                        await _close_ws_abnormally(
-                            client_ws=websocket,
-                            server_ws=proxy_ws,
-                            exc=caught_tg_exc,
-                        )
+                    await _close_ws(
+                        websocket,
+                        proxy_ws,
+                        ws_disconnect_deque,
+                        caught_tg_exc,
+                    )
 
         return False
 
@@ -738,18 +782,14 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
     @override
     async def proxy(  # pyright: ignore [reportIncompatibleMethodOverride]
         self, *, websocket: starlette_ws.WebSocket
-    ) -> Union[Literal[False], StarletteResponse]:
+    ) -> bool:
         """Establish websocket connection for both client and target_url, then pass messages between them.
 
         Args:
             websocket: The client websocket requests.
 
         Returns:
-            If the establish websocket connection unsuccessfully:
-                - Will call `websocket.close()` to send code `4xx`
-                - Then return a `StarletteResponse` from target server
-            If the establish websocket connection successfully:
-                - Will run forever until the connection is closed. Then return False.
+            bool: If handshake failed, return True. Else return False.
         """
         base_url = self.base_url
 

@@ -216,6 +216,8 @@ class _HypercornServer:
 class AutoServer:
     """An AsyncContext to launch and shutdown Hypercorn or Uvicorn server automatically."""
 
+    server_type: Literal["uvicorn", "hypercorn"]
+
     def __init__(
         self,
         app: FastAPI,
@@ -229,32 +231,32 @@ class AutoServer:
 
         If `host` == 0, then use random port.
         """
-        server_type = server_type if server_type is not None else "hypercorn"
-
         self.app = app
         self.host = host
         self.port = port
-        self.server_type = server_type
-
-        if self.server_type == "hypercorn":
-            config = HyperConfig()
-            config.bind = f"{host}:{port}"
-
-            self.config = config
-            self.server = _HypercornServer(app, config)
-        elif self.server_type == "uvicorn":
-            self.config = uvicorn.Config(app, host=host, port=port)
-            self.server = _UvicornServer(self.config)
-        else:
-            assert_never(self.server_type)
+        self._server_type: Optional[Literal["uvicorn", "hypercorn"]] = server_type
 
     async def __aenter__(self) -> Self:
         """Launch the server."""
-        if (
-            self.server_type == "uvicorn"
-            and sniffio.current_async_library() != "asyncio"
-        ):
-            raise RuntimeError("Uvicorn server does not support trio backend.")
+        if self._server_type is None:
+            if sniffio.current_async_library() == "asyncio":
+                self.server_type = "uvicorn"
+            else:
+                self.server_type = "hypercorn"
+        else:
+            self.server_type = self._server_type
+
+        if self.server_type == "hypercorn":
+            config = HyperConfig()
+            config.bind = f"{self.host}:{self.port}"
+
+            self.config = config
+            self.server = _HypercornServer(self.app, config)
+        elif self.server_type == "uvicorn":
+            self.config = uvicorn.Config(self.app, host=self.host, port=self.port)
+            self.server = _UvicornServer(self.config)
+        else:
+            assert_never(self.server_type)
 
         self._exit_stack = AsyncExitStack()
         await self._exit_stack.enter_async_context(self.server)

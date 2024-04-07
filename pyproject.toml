@@ -50,8 +50,8 @@ dynamic = ["version"]
 
 dependencies = [
     "httpx",
-    "httpx-ws >= 0.5.2",
-    "starlette",
+    "httpx-ws >= 0.6.0",
+    "starlette >= 0.37.2",
     "typing_extensions >=4.5.0",
     "anyio >= 4",
     "exceptiongroup",

@@ -10,7 +10,6 @@ from typing import (
     AsyncContextManager,
     AsyncIterator,
     Callable,
-    Literal,
     Optional,
     Set,
     TypeVar,
@@ -97,7 +96,7 @@ def _ws_register_router(
     @router.websocket("/{path:path}", **kwargs)
     async def ws_proxy(  # pyright: ignore[reportUnusedFunction]
         websocket: WebSocket,
-    ) -> Union[Response, Literal[False]]:
+    ) -> bool:
         """WebSocket proxy endpoint.
 
         Args:
@@ -105,11 +104,7 @@ def _ws_register_router(
             path: The path parameters of request.
 
         Returns:
-            If the establish websocket connection unsuccessfully:
-                - Will call `websocket.close()` to send code `4xx`
-                - Then return a `StarletteResponse` from target server
-            If the establish websocket connection successfully:
-                - Will run forever until the connection is closed. Then return False.
+            bool: If handshake failed, return True. Else return False.
         """
         return await proxy.proxy(websocket=websocket)
 

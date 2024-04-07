@@ -2,6 +2,7 @@
 
 
 from contextlib import AsyncExitStack
+from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from typing import Any, Dict
 
@@ -28,6 +29,12 @@ DEFAULT_PORT = 0  # random port
 # https://www.python-httpx.org/advanced/proxies/
 # NOTE: Foce to connect directly, avoid using system proxies
 NO_PROXIES: Dict[Any, Any] = {"all://": None}
+
+
+@dataclass
+class Tool4ServerTestFixture(Tool4TestFixture):  # noqa: D101
+    target_server: AutoServer
+    proxy_server: AutoServer
 
 
 def _subprocess_run_echo_ws_server(queue: "Queue[str]"):
@@ -98,7 +105,7 @@ class TestReverseWsProxy(AbstractTestProxy):
     async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         auto_server_fixture: AutoServerFixture,
-    ) -> Tool4TestFixture:
+    ) -> Tool4ServerTestFixture:
         """目标服务器请参考`tests.app.echo_ws_app.get_app`."""
         echo_ws_test_model = get_ws_test_app()
         echo_ws_app = echo_ws_test_model.app
@@ -124,22 +131,29 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(mounts=NO_PROXIES)
 
-        return Tool4TestFixture(
+        return Tool4ServerTestFixture(
             client_for_conn_to_target_server=client_for_conn_to_target_server,
             client_for_conn_to_proxy_server=client_for_conn_to_proxy_server,
             get_request=echo_ws_get_request,
             target_server_base_url=target_server_base_url,
             proxy_server_base_url=proxy_server_base_url,
+            target_server=target_ws_server,
+            proxy_server=proxy_ws_server,
         )
 
     @pytest.mark.anyio()
-    async def test_ws_proxy(self, tool_4_test_fixture: Tool4TestFixture) -> None:
+    async def test_ws_proxy(  # noqa: PLR0915
+        self, tool_4_test_fixture: Tool4ServerTestFixture
+    ) -> None:
         """测试websocket代理."""
         proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
         client_for_conn_to_proxy_server = (
             tool_4_test_fixture.client_for_conn_to_proxy_server
         )
         get_request = tool_4_test_fixture.get_request
+
+        target_server = tool_4_test_fixture.target_server
+        proxy_server = tool_4_test_fixture.proxy_server
 
         ########## 测试数据的正常转发 ##########
 
@@ -158,21 +172,58 @@ class TestReverseWsProxy(AbstractTestProxy):
         ########## 测试子协议 ##########
 
         async with aconnect_ws(
-            proxy_server_base_url + "accept_foo_subprotocol",
+            proxy_server_base_url + "accept_foo_subprotocol_and_foo_bar_header",
             client_for_conn_to_proxy_server,
             subprotocols=["foo", "bar"],
         ) as ws:
             assert ws.subprotocol == "foo"
+            assert ws.response is not None
+            assert ws.response.headers["foo"] == "bar"
 
-        ########## 关闭代码 ##########
+        ########## 客户端发送关闭代码 ##########
+
+        code = 1003
+        reason = "foo"
+        async with aconnect_ws(
+            proxy_server_base_url + "receive_and_send_text_once_without_closing",
+            client_for_conn_to_proxy_server,
+        ) as ws:
+            await ws.send_text("foo")
+            await ws.receive_text()
+            await ws.close(code=code, reason=reason)
+
+        target_starlette_ws = get_request()
+        assert isinstance(target_starlette_ws, starlette_websockets_module.WebSocket)
+        with pytest.raises(starlette_websockets_module.WebSocketDisconnect) as exce:
+            await target_starlette_ws.receive_text()
+
+        closing_event = target_starlette_ws.state.closing
+        assert isinstance(closing_event, anyio.Event)
+        closing_event.set()
+
+        # XXX, HACK, TODO:
+        # hypercorn can't receive correctly close code, it always receive 1006
+        # https://github.com/pgjones/hypercorn/issues/127
+        # so we only test close code for uvicorn
+        if (
+            target_server.server_type == "uvicorn"
+            and proxy_server.server_type == "uvicorn"
+        ):
+            assert exce.value.code == code
+            # XXX, HACK, TODO:
+            # reaseon are wrong, httpx-ws can't send close reason correctly
+            # assert exce.value.reason == reason
+
+        ########## 服务端发送关闭代码 ##########
 
         async with aconnect_ws(
-            proxy_server_base_url + "just_close_with_1001",
+            proxy_server_base_url + "just_close_with_1002_and_foo",
             client_for_conn_to_proxy_server,
         ) as ws:
             with pytest.raises(httpx_ws.WebSocketDisconnect) as exce:
                 await ws.receive_text()
-            assert exce.value.code == 1001
+            assert exce.value.code == 1002
+            assert exce.value.reason == "foo"
 
         ########## 协议升级失败或者连接失败 ##########
 
@@ -184,6 +235,22 @@ class TestReverseWsProxy(AbstractTestProxy):
                 pass
         # Starlette 在未调用`websocket.accept()`之前调用了`websocket.close()`，会发生403
         assert exce.value.response.status_code == 403
+
+        ########## test denial response ##########
+
+        with pytest.raises(httpx_ws.WebSocketUpgradeError) as exce:
+            async with aconnect_ws(
+                proxy_server_base_url
+                + "send_denial_response_400_foo_bar_header_and_json_body",
+                client_for_conn_to_proxy_server,
+            ) as ws:
+                pass
+        # Starlette 在未调用`websocket.accept()`之前调用了`websocket.close()`，会发生403
+        assert exce.value.response.status_code == 400
+        assert exce.value.response.headers["foo"] == "bar"
+        # XXX, HACK, TODO: Unable to read the content of WebSocketUpgradeError.response
+        # See: https://github.com/frankie567/httpx-ws/discussions/69
+        # assert exce.value.response.json() == {"foo": "bar"}
 
         ########## 客户端突然关闭时，服务器应该收到1011 ##########
 
@@ -215,10 +282,15 @@ class TestReverseWsProxy(AbstractTestProxy):
         with pytest.raises(starlette_websockets_module.WebSocketDisconnect) as exce:
             await target_starlette_ws.receive_text()  # receive_bytes() 也可以
 
+        closing_event = target_starlette_ws.state.closing
+        assert isinstance(closing_event, anyio.Event)
+        closing_event.set()
+
         # assert exce.value.code == 1011
         # HACK, FIXME: 无法测试错误代码，似乎无法正常传递，且不同后端也不同
         # FAILED test_ws_proxy[websockets] - assert 1005 == 1011
         # FAILED test_ws_proxy[wsproto] - assert <CloseReason.NORMAL_CLOSURE: 1000> == 1011
+        # NOTE: the close code for abnormal close is undefined behavior, so we won't test this
 
     # FIXME: 调查为什么收到关闭代码需要40s
     @pytest.mark.timeout(60)
@@ -289,3 +361,5 @@ class TestReverseWsProxy(AbstractTestProxy):
                 # 只要第二个客户端不是在之前40s基础上又重复40s，就暂时没问题，
                 # 因为这模拟了多个客户端进行连接的情况。
                 assert (seconde_ws_recv_end - seconde_ws_recv_start) < 2
+
+            # NOTE: the close code for abnormal close is undefined behavior, so we won't test this
