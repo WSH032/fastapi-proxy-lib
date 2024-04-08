@@ -55,14 +55,13 @@ except ImportError:  # pragma: no cover
     )
     DEFAULT_QUEUE_SIZE = 512  # pyright: ignore[reportConstantRedefinition]
 
-    msg = dedent(
-        """\
-        Can not import the default httpx_ws arguments, please open an issue on:
-        https://github.com/WSH032/fastapi-proxy-lib\
-        """
-    )
     warnings.warn(
-        msg,
+        dedent(
+            """\
+            Can not import the default httpx_ws arguments, please open an issue on:
+            https://github.com/WSH032/fastapi-proxy-lib\
+            """
+        ),
         RuntimeWarning,
         stacklevel=1,
     )
