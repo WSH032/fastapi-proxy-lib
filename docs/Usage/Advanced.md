@@ -118,3 +118,35 @@ async def _(request: Request, path: str = ""):
 ```
 
 visit `/`, you will notice that the response body is printed to the console.
+
+
+## Modify (redefine) response only to particular endpoint
+
+```python
+from fastapi import FastAPI
+from starlette.requests import Request
+from fastapi_proxy_lib.core.http import ReverseHttpProxy
+
+app = FastAPI()
+proxy = ReverseHttpProxy(base_url="https://httpbin.org/")
+
+@app.get("/{path:path}")
+async def _(request: Request, path: str = ""):
+    if path == "ip" and request.method == "GET":
+        return { "msg": "Method is redefined"}
+    else:
+        proxy_response = await proxy.proxy(request=request, path=path)
+        return proxy_response
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+In this example all requests except `GET /ip` will be passed to `httpbin.org`:
+
+```python
+python3 test.py                         # Uvicorn running on http://0.0.0.0:8000
+curl http://127.0.0.0:8000/user-agent   # { "user-agent": "curl/7.81.0" }
+curl http://127.0.0.0:8000/ip           # {"msg":"Method is redefined"}
+```
