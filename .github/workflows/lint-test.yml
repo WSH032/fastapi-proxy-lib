@@ -12,6 +12,8 @@ on:
   # NOTE: set `secrets: inherit` when call this workflow from other workflow.
   workflow_call:
 
+#
+
 jobs:
   lint-check:
     runs-on: ubuntu-latest
