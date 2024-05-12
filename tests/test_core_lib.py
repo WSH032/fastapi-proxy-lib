@@ -70,7 +70,10 @@ async def test_func_return_err_msg_response() -> None:
     #     }
     # }
 
-    client = httpx.AsyncClient(app=app, base_url="http://www.example.com")
+    client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app),  # pyright: ignore[reportArgumentType]
+        base_url="http://www.example.com",
+    )
     resp = await client.get("http://www.example.com/exception")
     assert resp.status_code == 0
     assert resp.json()["detail"] == test_err_msg

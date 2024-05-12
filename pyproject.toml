@@ -50,9 +50,11 @@ dynamic = ["version"]
 
 dependencies = [
     "httpx",
-    "httpx-ws >= 0.4.2",
-    "starlette",
+    "httpx-ws >= 0.6.0",
+    "starlette >= 0.37.2",
     "typing_extensions >=4.5.0",
+    "anyio >= 4",
+    "exceptiongroup",
 ]
 
 [project.optional-dependencies]
@@ -96,10 +98,11 @@ dependencies = [
     "pytest == 7.*",
     "pytest-cov ==  4.*",
     "uvicorn[standard] < 1.0.0", # TODO: Once it releases version 1.0.0, we will remove this restriction.
+    "hypercorn[trio] == 0.16.*",
     "httpx[http2]",              # we don't set version here, instead set it in `[project].dependencies`.
-    "anyio",                     # we don't set version here, because fastapi has a dependency on it
-    "asgi-lifespan==2.*",
-    "pytest-timeout==2.*",
+    "asgi-lifespan == 2.*",
+    "pytest-timeout == 2.*",
+    "sniffio == 1.3.*",
 ]
 
 [tool.hatch.envs.default.scripts]

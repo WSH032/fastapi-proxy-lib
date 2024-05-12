@@ -29,7 +29,7 @@ app = reverse_http_app(client=client, base_url=base_url)
 ```
 
 1. You can pass `httpx.AsyncClient` instance:
-    - if you want to customize the arguments, e.g. `httpx.AsyncClient(proxies={})`
+    - if you want to customize the arguments, e.g. `httpx.AsyncClient(http2=True)`
     - if you want to reuse the connection pool of `httpx.AsyncClient`
     ---
     Or you can pass `None`(The default value), then `fastapi-proxy-lib` will create a new `httpx.AsyncClient` instance for you.

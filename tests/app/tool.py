@@ -1,18 +1,30 @@
 # noqa: D100
 
-import asyncio
-import socket
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Type, TypedDict, TypeVar, Union
+from typing import Any, Literal, Optional, TypedDict, Union
 
+import anyio
 import httpx
+import sniffio
 import uvicorn
 from fastapi import FastAPI
+from hypercorn import Config as HyperConfig
+from hypercorn.asyncio.run import (
+    worker_serve as hyper_aio_worker_serve,  # pyright: ignore[reportUnknownVariableType]
+)
+from hypercorn.trio.run import (
+    worker_serve as hyper_trio_worker_serve,  # pyright: ignore[reportUnknownVariableType]
+)
+from hypercorn.utils import (
+    repr_socket_addr,  # pyright: ignore[reportUnknownVariableType]
+)
+from hypercorn.utils import (
+    wrap_app as hyper_wrap_app,  # pyright: ignore[reportUnknownVariableType]
+)
 from starlette.requests import Request
 from starlette.websockets import WebSocket
-from typing_extensions import Self, override
-
-_Decoratable_T = TypeVar("_Decoratable_T", bound=Union[Callable[..., Any], Type[Any]])
+from typing_extensions import Self, assert_never
 
 ServerRecvRequestsTypes = Union[Request, WebSocket]
 
@@ -46,180 +58,32 @@ class AppDataclass4Test:
         return server_recv_request
 
 
-def _no_override_uvicorn_server(_method: _Decoratable_T) -> _Decoratable_T:
-    """Check if the method is already in `uvicorn.Server`."""
-    assert not hasattr(
-        uvicorn.Server, _method.__name__
-    ), f"Override method of `uvicorn.Server` cls : {_method.__name__}"
-    return _method
+class _UvicornServer(uvicorn.Server):
+    """subclass of `uvicorn.Server` which can use AsyncContext to launch and shutdown automatically."""
 
-
-class AeixtTimeoutUndefine:
-    """Didn't set `contx_exit_timeout` in `aexit()`."""
-
-
-aexit_timeout_undefine = AeixtTimeoutUndefine()
-
-
-# HACK: 不能继承 AbstractAsyncContextManager[Self]
-# 目前有问题，继承 AbstractAsyncContextManager 的话pyright也推测不出来类型
-# 只能依靠 __aenter__ 和 __aexit__ 的类型注解
-class UvicornServer(uvicorn.Server):
-    """subclass of `uvicorn.Server` which can use AsyncContext to launch and shutdown automatically.
-
-    Attributes:
-        contx_server_task: The task of server.
-        contx_socket: The socket of server.
-
-        other attributes are same as `uvicorn.Server`:
-            - config: The config arg that be passed in.
-            ...
-    """
-
-    _contx_server_task: Union["asyncio.Task[None]", None]
-    assert not hasattr(uvicorn.Server, "_contx_server_task")
-
-    _contx_socket: Union[socket.socket, None]
-    assert not hasattr(uvicorn.Server, "_contx_socket")
-
-    _contx_server_started_event: Union[asyncio.Event, None]
-    assert not hasattr(uvicorn.Server, "_contx_server_started_event")
-
-    contx_exit_timeout: Union[int, float, None]
-    assert not hasattr(uvicorn.Server, "contx_exit_timeout")
-
-    @override
-    def __init__(
-        self, config: uvicorn.Config, contx_exit_timeout: Union[int, float, None] = None
-    ) -> None:
-        """The same as `uvicorn.Server.__init__`."""
-        super().__init__(config=config)
-        self._contx_server_task = None
-        self._contx_socket = None
-        self._contx_server_started_event = None
-        self.contx_exit_timeout = contx_exit_timeout
-
-    @override
-    async def startup(self, sockets: Optional[List[socket.socket]] = None) -> None:
-        """The same as `uvicorn.Server.startup`."""
-        super_return = await super().startup(sockets=sockets)
-        self.contx_server_started_event.set()
-        return super_return
-
-    @_no_override_uvicorn_server
-    async def aenter(self) -> Self:
+    async def __aenter__(self) -> Self:
         """Launch the server."""
-        # 在分配资源之前，先检查是否重入
-        if self.contx_server_started_event.is_set():
-            raise RuntimeError("DO not launch server by __aenter__ again!")
-
         # FIXME: # 这个socket被设计为可被同一进程内的多个server共享，可能会引起潜在问题
-        self._contx_socket = self.config.bind_socket()
+        self._socket = self.config.bind_socket()
+        self._exit_stack = AsyncExitStack()
 
-        self._contx_server_task = asyncio.create_task(
-            self.serve([self._contx_socket]), name=f"Uvicorn Server Task of {self}"
+        task_group = await self._exit_stack.enter_async_context(
+            anyio.create_task_group()
         )
-        # 在 uvicorn.Server 的实现中，Server.serve() 内部会调用 Server.startup() 完成启动
-        # 被覆盖的 self.startup() 会在完成时调用 self.contx_server_started_event.set()
-        await self.contx_server_started_event.wait()  # 等待服务器确实启动后才返回
+        task_group.start_soon(
+            self.serve, [self._socket], name=f"Uvicorn Server Task of {self}"
+        )
+
         return self
 
-    @_no_override_uvicorn_server
-    async def __aenter__(self) -> Self:
-        """Launch the server.
-
-        The same as `self.aenter()`.
-        """
-        return await self.aenter()
-
-    @_no_override_uvicorn_server
-    async def aexit(
-        self,
-        contx_exit_timeout: Union[
-            int, float, None, AeixtTimeoutUndefine
-        ] = aexit_timeout_undefine,
-    ) -> None:
-        """Shutdown the server."""
-        contx_server_task = self.contx_server_task
-        contx_socket = self.contx_socket
-
-        if isinstance(contx_exit_timeout, AeixtTimeoutUndefine):
-            contx_exit_timeout = self.contx_exit_timeout
-
-        # 在 uvicorn.Server 的实现中，设置 should_exit 可以使得 server 任务结束
-        assert hasattr(self, "should_exit")
-        self.should_exit = True
-
-        try:
-            await asyncio.wait_for(contx_server_task, timeout=contx_exit_timeout)
-        except asyncio.TimeoutError:
-            print(f"{contx_server_task.get_name()} timeout!")
-        finally:
-            # 其实uvicorn.Server会自动关闭socket，这里是为了保险起见
-            contx_socket.close()
-
-    @_no_override_uvicorn_server
     async def __aexit__(self, *_: Any, **__: Any) -> None:
-        """Shutdown the server.
-
-        The same as `self.aexit()`.
-        """
-        return await self.aexit()
-
-    @property
-    @_no_override_uvicorn_server
-    def contx_server_started_event(self) -> asyncio.Event:
-        """The event that indicates the server has started.
-
-        When first call the property, it will instantiate a `asyncio.Event()`to
-        `self._contx_server_started_event`.
-
-        Warn: This is a internal implementation detail, do not change the event manually.
-            - please call the property in `self.aenter()` or `self.startup()` **first**.
-            - **Never** call it outside of an async event loop first:
-                https://stackoverflow.com/questions/53724665/using-queues-results-in-asyncio-exception-got-future-future-pending-attached
-        """
-        if self._contx_server_started_event is None:
-            self._contx_server_started_event = asyncio.Event()
-
-        return self._contx_server_started_event
+        """Shutdown the server."""
+        # 在 uvicorn.Server 的实现中，设置 should_exit 可以使得 server 任务结束
+        assert not self.should_exit, "The server has already exited."
+        self.should_exit = True
+        await self._exit_stack.__aexit__(*_, **__)
 
     @property
-    @_no_override_uvicorn_server
-    def contx_socket(self) -> socket.socket:
-        """The socket of server.
-
-        Note: must call `self.__aenter__()` first.
-        """
-        if self._contx_socket is None:
-            raise RuntimeError("Please call `self.__aenter__()` first.")
-        else:
-            return self._contx_socket
-
-    @property
-    @_no_override_uvicorn_server
-    def contx_server_task(self) -> "asyncio.Task[None]":
-        """The task of server.
-
-        Note: must call `self.__aenter__()` first.
-        """
-        if self._contx_server_task is None:
-            raise RuntimeError("Please call `self.__aenter__()` first.")
-        else:
-            return self._contx_server_task
-
-    @property
-    @_no_override_uvicorn_server
-    def contx_socket_getname(self) -> Any:
-        """Utils for calling self.contx_socket.getsockname().
-
-        Return:
-            refer to: https://docs.python.org/zh-cn/3/library/socket.html#socket-families
-        """
-        return self.contx_socket.getsockname()
-
-    @property
-    @_no_override_uvicorn_server
     def contx_socket_url(self) -> httpx.URL:
         """If server is tcp socket, return the url of server.
 
@@ -228,10 +92,185 @@ class UvicornServer(uvicorn.Server):
         config = self.config
         if config.fd is not None or config.uds is not None:
             raise RuntimeError("Only support tcp socket.")
-        host, port = self.contx_socket_getname[:2]
+
+        # Implement ref:
+        # https://github.com/encode/uvicorn/blob/a2219eb2ed2bbda4143a0fb18c4b0578881b1ae8/uvicorn/server.py#L201-L220
+        host, port = self._socket.getsockname()[:2]
         return httpx.URL(
             host=host,
             port=port,
             scheme="https" if config.is_ssl else "http",
             path="/",
         )
+
+
+class _HypercornServer:
+    """An AsyncContext to launch and shutdown Hypercorn server automatically."""
+
+    def __init__(self, app: FastAPI, config: HyperConfig):
+        self.config = config
+        self.app = app
+        self.should_exit = anyio.Event()
+
+    async def __aenter__(self) -> Self:
+        """Launch the server."""
+        self._exit_stack = AsyncExitStack()
+
+        self.current_async_lib = sniffio.current_async_library()
+
+        if self.current_async_lib == "asyncio":
+            serve_func = (  # pyright: ignore[reportUnknownVariableType]
+                hyper_aio_worker_serve
+            )
+
+            # Implement ref:
+            # https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/asyncio/run.py#L89-L90
+            self._sockets = self.config.create_sockets()
+
+        elif self.current_async_lib == "trio":
+            serve_func = (  # pyright: ignore[reportUnknownVariableType]
+                hyper_trio_worker_serve
+            )
+
+            # Implement ref:
+            # https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/trio/run.py#L51-L56
+            self._sockets = self.config.create_sockets()
+            for sock in self._sockets.secure_sockets:
+                sock.listen(self.config.backlog)
+            for sock in self._sockets.insecure_sockets:
+                sock.listen(self.config.backlog)
+
+        else:
+            raise RuntimeError(f"Unsupported async library {self.current_async_lib!r}")
+
+        async def serve() -> None:
+            # Implement ref:
+            #   https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/asyncio/__init__.py#L12-L46
+            #   https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/trio/__init__.py#L14-L52
+            await serve_func(
+                hyper_wrap_app(
+                    self.app,  # pyright: ignore[reportArgumentType]
+                    self.config.wsgi_max_body_size,
+                    mode=None,
+                ),
+                self.config,
+                shutdown_trigger=self.should_exit.wait,
+                sockets=self._sockets,
+            )
+
+        task_group = await self._exit_stack.enter_async_context(
+            anyio.create_task_group()
+        )
+        task_group.start_soon(serve, name=f"Hypercorn Server Task of {self}")
+        return self
+
+    async def __aexit__(self, *_: Any, **__: Any) -> None:
+        """Shutdown the server."""
+        assert not self.should_exit.is_set(), "The server has already exited."
+        self.should_exit.set()
+        await self._exit_stack.__aexit__(*_, **__)
+
+    @property
+    def contx_socket_url(self) -> httpx.URL:
+        """If server is tcp socket, return the url of server.
+
+        Note: The path of url is explicitly set to "/".
+        """
+        config = self.config
+        sockets = self._sockets
+
+        # Implement ref:
+        #   https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/asyncio/run.py#L112-L149
+        #   https://github.com/pgjones/hypercorn/blob/3fbd5f245e5dfeaba6ad852d9135d6a32b228d05/src/hypercorn/trio/run.py#L61-L82
+
+        # We only run on one socket each time,
+        # so we raise `RuntimeError` to avoid other unknown errors during testing.
+        if sockets.insecure_sockets:
+            if len(sockets.insecure_sockets) > 1:
+                raise RuntimeError("Hypercorn test: Multiple insecure_sockets found.")
+            socket = sockets.insecure_sockets[0]
+        elif sockets.secure_sockets:
+            if len(sockets.secure_sockets) > 1:
+                raise RuntimeError("Hypercorn test: secure_sockets sockets found.")
+            socket = sockets.secure_sockets[0]
+        else:
+            raise RuntimeError("Hypercorn test: No socket found.")
+
+        bind = repr_socket_addr(socket.family, socket.getsockname())
+        if bind.startswith(("unix:", "fd://")):
+            raise RuntimeError("Only support tcp socket.")
+
+        # Implement ref:
+        # https://docs.python.org/zh-cn/3/library/socket.html#socket-families
+        host, port = bind.split(":")
+        port = int(port)
+
+        return httpx.URL(
+            host=host,
+            port=port,
+            scheme="https" if config.ssl_enabled else "http",
+            path="/",
+        )
+
+
+class AutoServer:
+    """An AsyncContext to launch and shutdown Hypercorn or Uvicorn server automatically."""
+
+    server_type: Literal["uvicorn", "hypercorn"]
+
+    def __init__(
+        self,
+        app: FastAPI,
+        host: str,
+        port: int,
+        server_type: Optional[Literal["uvicorn", "hypercorn"]] = None,
+    ):
+        """Only support ipv4 address.
+
+        If use uvicorn, it only support asyncio backend.
+
+        If `host` == 0, then use random port.
+        """
+        self.app = app
+        self.host = host
+        self.port = port
+        self._server_type: Optional[Literal["uvicorn", "hypercorn"]] = server_type
+
+    async def __aenter__(self) -> Self:
+        """Launch the server."""
+        if self._server_type is None:
+            if sniffio.current_async_library() == "asyncio":
+                self.server_type = "uvicorn"
+            else:
+                self.server_type = "hypercorn"
+        else:
+            self.server_type = self._server_type
+
+        if self.server_type == "hypercorn":
+            config = HyperConfig()
+            config.bind = f"{self.host}:{self.port}"
+
+            self.config = config
+            self.server = _HypercornServer(self.app, config)
+        elif self.server_type == "uvicorn":
+            self.config = uvicorn.Config(self.app, host=self.host, port=self.port)
+            self.server = _UvicornServer(self.config)
+        else:
+            assert_never(self.server_type)
+
+        self._exit_stack = AsyncExitStack()
+        await self._exit_stack.enter_async_context(self.server)
+        await anyio.sleep(0.5)  # XXX, HACK: wait for server to start
+        return self
+
+    async def __aexit__(self, *_: Any, **__: Any) -> None:
+        """Shutdown the server."""
+        await self._exit_stack.__aexit__(*_, **__)
+
+    @property
+    def contx_socket_url(self) -> httpx.URL:
+        """If server is tcp socket, return the url of server.
+
+        Note: The path of url is explicitly set to "/".
+        """
+        return self.server.contx_socket_url

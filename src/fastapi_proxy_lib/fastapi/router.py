@@ -3,7 +3,6 @@
 The low-level API for [fastapi_proxy_lib.fastapi.app][].
 """
 
-import asyncio
 import warnings
 from contextlib import asynccontextmanager
 from typing import (
@@ -11,13 +10,13 @@ from typing import (
     AsyncContextManager,
     AsyncIterator,
     Callable,
-    Literal,
     Optional,
     Set,
     TypeVar,
     Union,
 )
 
+import anyio
 from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.responses import Response
@@ -63,7 +62,7 @@ def _http_register_router(
     @router.patch("/{path:path}", **kwargs)
     @router.trace("/{path:path}", **kwargs)
     async def http_proxy(  # pyright: ignore[reportUnusedFunction]
-        request: Request, path: str = ""
+        request: Request,
     ) -> Response:
         """HTTP proxy endpoint.
 
@@ -74,7 +73,7 @@ def _http_register_router(
         Returns:
             The response from target server.
         """
-        return await proxy.proxy(request=request, path=path)
+        return await proxy.proxy(request=request)
 
 
 def _ws_register_router(
@@ -96,8 +95,8 @@ def _ws_register_router(
 
     @router.websocket("/{path:path}", **kwargs)
     async def ws_proxy(  # pyright: ignore[reportUnusedFunction]
-        websocket: WebSocket, path: str = ""
-    ) -> Union[Response, Literal[False]]:
+        websocket: WebSocket,
+    ) -> bool:
         """WebSocket proxy endpoint.
 
         Args:
@@ -105,13 +104,9 @@ def _ws_register_router(
             path: The path parameters of request.
 
         Returns:
-            If the establish websocket connection unsuccessfully:
-                - Will call `websocket.close()` to send code `4xx`
-                - Then return a `StarletteResponse` from target server
-            If the establish websocket connection successfully:
-                - Will run forever until the connection is closed. Then return False.
+            bool: If handshake failed, return True. Else return False.
         """
-        return await proxy.proxy(websocket=websocket, path=path)
+        return await proxy.proxy(websocket=websocket)
 
 
 class RouterHelper:
@@ -273,6 +268,8 @@ class RouterHelper:
                 When __aexit__ is called, will close all registered proxy.
             """
             yield
-            await asyncio.gather(*[proxy.aclose() for proxy in self.registered_proxy])
+            async with anyio.create_task_group() as tg:
+                for proxy in self.registered_proxy:
+                    tg.start_soon(proxy.aclose)
 
         return shutdown_clients
