@@ -208,7 +208,7 @@ class TestReverseWsProxy(AbstractTestProxy):
         # NOTE: 这个测试不放在 `test_target_server_shutdown_abnormally` 来做
         # 是因为这里已经有现成的target server，放在这里测试可以节省启动服务器时间
 
-        aconnect_ws_subprocess_queue: "Queue[str]" = Queue()
+        aconnect_ws_subprocess_queue: Queue[str] = Queue()
 
         kwargs_async_client = {"proxies": NO_PROXIES}
         kwargs_aconnect_ws = {"url": proxy_server_base_url + "do_nothing"}
@@ -256,7 +256,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         需要在 60s 内向客户端发送 1011 关闭代码.
         """
-        subprocess_queue: "Queue[str]" = Queue()
+        subprocess_queue: Queue[str] = Queue()
 
         target_ws_server_subprocess = Process(
             target=_subprocess_run_echo_ws_uvicorn_server,
