@@ -2,17 +2,23 @@
 
 
 import asyncio
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, asynccontextmanager
 from multiprocessing import Process, Queue
-from typing import Any, Dict, Literal, Optional
+from typing import Any, AsyncIterator, Dict, Literal, Optional, Protocol
 
 import httpx
 import httpx_ws
 import pytest
 import uvicorn
+from fastapi import FastAPI
+from fastapi_proxy_lib.core.websocket import (
+    ReverseWebSocketProxy,
+    _CallbackType,  # pyright: ignore[reportPrivateUsage] # from this project, so it's ok
+)
 from fastapi_proxy_lib.fastapi.app import reverse_ws_app as get_reverse_ws_app
 from httpx_ws import aconnect_ws
 from starlette import websockets as starlette_websockets_module
+from starlette.websockets import WebSocket as StarletteWebSocket
 from typing_extensions import override
 
 from .app.echo_ws_app import get_app as get_ws_test_app
@@ -35,6 +41,22 @@ WS_BACKENDS_NEED_BE_TESTED = ("websockets",)
 
 # https://www.python-httpx.org/advanced/#http-proxying
 NO_PROXIES: Dict[Any, Any] = {"all://": None}
+
+
+class WsAppFactory(Protocol):
+    """The factory for `Tool4TestFixture`."""
+
+    def __call__(self, client: httpx.AsyncClient, *, base_url: str) -> FastAPI:
+        """Return the ws proxy app for testing."""
+        ...
+
+
+class Tool4TestFixtureFactory(Protocol):
+    """The factory for `Tool4TestFixture`."""
+
+    async def __call__(self, ws_app_factory: WsAppFactory) -> Tool4TestFixture:
+        """See the implementation for details."""
+        ...
 
 
 def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
@@ -101,54 +123,109 @@ def _subprocess_run_httpx_ws(
     asyncio.run(run())
 
 
+def callback_ws_app_factory_builder(
+    client_to_server_callback: Optional[_CallbackType] = None,
+    server_to_client_callback: Optional[_CallbackType] = None,
+) -> WsAppFactory:
+    """Return a ws proxy app factory with callback."""
+
+    def callback_ws_app_factory(client: httpx.AsyncClient, *, base_url: str) -> FastAPI:
+        """Return a ws proxy app with callback."""
+        proxy = ReverseWebSocketProxy(
+            client=client,
+            base_url=base_url,
+        )
+
+        @asynccontextmanager
+        async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
+            """Close proxy."""
+            yield
+            await proxy.aclose()
+
+        app = FastAPI(lifespan=close_proxy_event)
+
+        @app.websocket("/{path:path}")
+        async def _(websocket: StarletteWebSocket, path: str = ""):
+            return await proxy.proxy(
+                websocket=websocket,
+                path=path,
+                client_to_server_callback=client_to_server_callback,
+                server_to_client_callback=server_to_client_callback,
+            )
+
+        return app
+
+    return callback_ws_app_factory
+
+
 class TestReverseWsProxy(AbstractTestProxy):
     """For testing reverse websocket proxy."""
 
-    @override
     @pytest.fixture(params=WS_BACKENDS_NEED_BE_TESTED)
-    async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
+    def tool_4_test_fixture_factory(
         self,
         uvicorn_server_fixture: UvicornServerFixture,
         request: pytest.FixtureRequest,
-    ) -> Tool4TestFixture:
+    ) -> Tool4TestFixtureFactory:
         """目标服务器请参考`tests.app.echo_ws_app.get_app`."""
-        echo_ws_test_model = get_ws_test_app()
-        echo_ws_app = echo_ws_test_model.app
-        echo_ws_get_request = echo_ws_test_model.get_request
 
-        target_ws_server = await uvicorn_server_fixture(
-            uvicorn.Config(
-                echo_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
-            ),
-            contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
-        )
+        async def _tool_4_test_fixture_factory(
+            ws_app_factory: WsAppFactory,
+        ) -> Tool4TestFixture:
+            """Create a tool for testing reverse websocket proxy.
 
-        target_server_base_url = str(target_ws_server.contx_socket_url)
+            Args:
+                ws_app_factory: A app factory for create reverse proxy websocket app,
+            """
+            echo_ws_test_model = get_ws_test_app()
+            echo_ws_app = echo_ws_test_model.app
+            echo_ws_get_request = echo_ws_test_model.get_request
 
-        client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
+            target_ws_server = await uvicorn_server_fixture(
+                uvicorn.Config(
+                    echo_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
+                ),
+                contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
+            )
 
-        reverse_ws_app = get_reverse_ws_app(
-            client=client_for_conn_to_target_server, base_url=target_server_base_url
-        )
+            target_server_base_url = str(target_ws_server.contx_socket_url)
 
-        proxy_ws_server = await uvicorn_server_fixture(
-            uvicorn.Config(
-                reverse_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
-            ),
-            contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
-        )
+            client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
 
-        proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
+            reverse_ws_app = ws_app_factory(
+                client=client_for_conn_to_target_server, base_url=target_server_base_url
+            )
 
-        client_for_conn_to_proxy_server = httpx.AsyncClient(proxies=NO_PROXIES)
+            proxy_ws_server = await uvicorn_server_fixture(
+                uvicorn.Config(
+                    reverse_ws_app,
+                    port=DEFAULT_PORT,
+                    host=DEFAULT_HOST,
+                    ws=request.param,
+                ),
+                contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
+            )
 
-        return Tool4TestFixture(
-            client_for_conn_to_target_server=client_for_conn_to_target_server,
-            client_for_conn_to_proxy_server=client_for_conn_to_proxy_server,
-            get_request=echo_ws_get_request,
-            target_server_base_url=target_server_base_url,
-            proxy_server_base_url=proxy_server_base_url,
-        )
+            proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
+
+            client_for_conn_to_proxy_server = httpx.AsyncClient(proxies=NO_PROXIES)
+
+            return Tool4TestFixture(
+                client_for_conn_to_target_server=client_for_conn_to_target_server,
+                client_for_conn_to_proxy_server=client_for_conn_to_proxy_server,
+                get_request=echo_ws_get_request,
+                target_server_base_url=target_server_base_url,
+                proxy_server_base_url=proxy_server_base_url,
+            )
+
+        return _tool_4_test_fixture_factory
+
+    @override
+    @pytest.fixture()
+    async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, tool_4_test_fixture_factory: Tool4TestFixtureFactory
+    ) -> Tool4TestFixture:
+        return await tool_4_test_fixture_factory(get_reverse_ws_app)
 
     @pytest.mark.anyio()
     async def test_ws_proxy(self, tool_4_test_fixture: Tool4TestFixture) -> None:
