@@ -2,21 +2,34 @@
 
 import asyncio
 import logging
-from contextlib import AsyncExitStack
+from contextlib import (
+    AsyncExitStack,
+    asynccontextmanager,
+    contextmanager,
+    nullcontext,
+)
 from typing import (
     TYPE_CHECKING,
     Any,
+    AsyncIterator,
+    Callable,
+    ContextManager,
+    Coroutine,
+    Iterator,
     List,
     Literal,
     NamedTuple,
     NoReturn,
     Optional,
+    Tuple,
     Union,
 )
 
 import httpx
 import httpx_ws
 import starlette.websockets as starlette_ws
+from anyio import create_memory_object_stream
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from httpx_ws._api import (  # HACK: 注意，这个是私有模块
     DEFAULT_KEEPALIVE_PING_INTERVAL_SECONDS,
     DEFAULT_KEEPALIVE_PING_TIMEOUT_SECONDS,
@@ -29,6 +42,7 @@ from starlette.responses import Response as StarletteResponse
 from starlette.responses import StreamingResponse
 from starlette.types import Scope
 from typing_extensions import TypeAlias, override
+from typing_extensions import TypeVar as TypeVarExt
 from wsproto.events import BytesMessage as WsprotoBytesMessage
 from wsproto.events import TextMessage as WsprotoTextMessage
 
@@ -39,10 +53,7 @@ from ._tool import (
     check_http_version,
 )
 
-__all__ = (
-    "BaseWebSocketProxy",
-    "ReverseWebSocketProxy",
-)
+__all__ = ("BaseWebSocketProxy", "ReverseWebSocketProxy", "CallbackPipeContextType")
 
 if TYPE_CHECKING:
     # 这些是私有模块，无法确定以后版本是否会改变，为了保证运行时不会出错，我们使用TYPE_CHECKING
@@ -54,6 +65,30 @@ if TYPE_CHECKING:
 
 _ClentToServerTaskType: TypeAlias = "asyncio.Task[starlette_ws.WebSocketDisconnect]"
 _ServerToClientTaskType: TypeAlias = "asyncio.Task[httpx_ws.WebSocketDisconnect]"
+
+
+_DefaultWsMsgType = Union[str, bytes]
+_WsMsgType = Union[str, bytes, _DefaultWsMsgType]
+"""Websocket message type."""
+_WsMsgTypeVar = TypeVarExt("_WsMsgTypeVar", bound=_WsMsgType, default=_DefaultWsMsgType)
+"""Generic websocket message type."""
+_CallbackPipeType = Tuple[
+    MemoryObjectSendStream[_WsMsgTypeVar], MemoryObjectReceiveStream[_WsMsgTypeVar]
+]
+"""Send end and receive end of a callback pipe."""
+CallbackPipeContextType = ContextManager[_CallbackPipeType[_WsMsgTypeVar]]
+"""A context manager that will automatically close the pipe when exit.
+
+Warning:
+    This is a unstable public type hint, you shouldn't rely on it.
+    You should create your own type hint instead.
+
+See example: [ReverseWebSocketProxy#with-callback][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy--with-callback]
+"""
+_CallbackType = Callable[
+    [CallbackPipeContextType[_WsMsgTypeVar]], Coroutine[None, None, None]
+]
+"""The websocket callback provided by user."""
 
 
 class _ClientServerProxyTask(NamedTuple):
@@ -70,6 +105,8 @@ class _ClientServerProxyTask(NamedTuple):
 SUPPORTED_WS_HTTP_VERSIONS = ("1.1",)
 """The http versions that we supported now. It depends on `httpx`."""
 
+_CALLBACK_BUFFER_SIZE = 0
+"""The buffer size of the callback pipe."""
 
 #################### Error ####################
 
@@ -95,6 +132,50 @@ def _get_client_request_subprotocols(ws_scope: Scope) -> Union[List[str], None]:
     if not subprotocols:  # 即为 []
         return None
     return subprotocols
+
+
+@contextmanager
+def _pipe_context_builder(
+    raw_pipe: _CallbackPipeType[_WsMsgTypeVar],
+) -> Iterator[_CallbackPipeType[_WsMsgTypeVar]]:
+    """Auto close the pipe when exit the context."""
+    sender, receiver = raw_pipe
+    with sender, receiver:
+        yield raw_pipe
+
+
+@asynccontextmanager
+async def _wait_task_and_ignore_exce(
+    callback_task: "asyncio.Task[Any]",
+) -> AsyncIterator[None]:
+    """Wait for the task when exiting, but ignore the exception."""
+    yield
+    try:
+        await callback_task
+    except Exception:
+        pass
+
+
+async def _enable_callback(
+    callback: _CallbackType[_WsMsgTypeVar], task_name: str, exit_stack: AsyncExitStack
+) -> CallbackPipeContextType[_WsMsgTypeVar]:
+    """Create a task to run the callback.
+
+    The callback task will be awaited when exit the `exit_stack`,
+    but the exception of callback task will be ignored.
+    """
+    proxy_sender, cb_receiver = create_memory_object_stream[_WsMsgTypeVar](
+        _CALLBACK_BUFFER_SIZE
+    )
+    cb_sender, proxy_receiver = create_memory_object_stream[_WsMsgTypeVar](
+        _CALLBACK_BUFFER_SIZE
+    )
+    cb_pipe_ctx = _pipe_context_builder((cb_sender, cb_receiver))
+    proxy_pipe_ctx = _pipe_context_builder((proxy_sender, proxy_receiver))
+
+    cb_task = asyncio.create_task(callback(cb_pipe_ctx), name=task_name)
+    await exit_stack.enter_async_context(_wait_task_and_ignore_exce(cb_task))
+    return proxy_pipe_ctx
 
 
 # TODO: 等待starlette官方的支持
@@ -261,13 +342,19 @@ async def _starlette_ws_send_bytes_or_str(
 
 
 async def _wait_client_then_send_to_server(
-    *, client_ws: starlette_ws.WebSocket, server_ws: httpx_ws.AsyncWebSocketSession
+    *,
+    client_ws: starlette_ws.WebSocket,
+    server_ws: httpx_ws.AsyncWebSocketSession,
+    pipe_context: Optional[CallbackPipeContextType[_WsMsgTypeVar]] = None,
 ) -> starlette_ws.WebSocketDisconnect:
     """Receive data from client, then send to target server.
 
     Args:
         client_ws: The websocket which receive data of client.
         server_ws: The websocket which send data to target server.
+        pipe_context: The callback pipe for processing data.
+            will send the received data(from client) to the sender,
+            and receive the data from the receiver(then send to the server).
 
     Returns:
         If the client_ws sends a shutdown message normally, will return starlette_ws.WebSocketDisconnect.
@@ -275,24 +362,39 @@ async def _wait_client_then_send_to_server(
     Raises:
         error for receiving: refer to `_starlette_ws_receive_bytes_or_str`
         error for sending: refer to `_httpx_ws_send_bytes_or_str`
+        error for callback: refer to `MemoryObjectReceiveStream.receive` and `MemoryObjectSendStream.send`
     """
-    while True:
-        try:
-            receive = await _starlette_ws_receive_bytes_or_str(client_ws)
-        except starlette_ws.WebSocketDisconnect as e:
-            return e
-        else:
+    with pipe_context or nullcontext() as pipe:
+        while True:
+            try:
+                receive = await _starlette_ws_receive_bytes_or_str(client_ws)
+            except starlette_ws.WebSocketDisconnect as e:
+                return e
+
+            # TODO: do not use `if` statement in loop
+            if pipe is not None:
+                sender, receiver = pipe
+                # XXX, HACK, TODO: We can't identify the msg type from websocket,
+                # so we have to igonre the type check here.
+                await sender.send(receive)  # pyright: ignore [reportArgumentType]
+                receive = await receiver.receive()
             await _httpx_ws_send_bytes_or_str(server_ws, receive)
 
 
 async def _wait_server_then_send_to_client(
-    *, client_ws: starlette_ws.WebSocket, server_ws: httpx_ws.AsyncWebSocketSession
+    *,
+    client_ws: starlette_ws.WebSocket,
+    server_ws: httpx_ws.AsyncWebSocketSession,
+    pipe_context: Optional[CallbackPipeContextType[_WsMsgTypeVar]] = None,
 ) -> httpx_ws.WebSocketDisconnect:
     """Receive data from target server, then send to client.
 
     Args:
         client_ws: The websocket which send data to client.
         server_ws: The websocket which receive data of target server.
+        pipe_context: The callback pipe for processing data.
+            will send the received data(from server) to the sender,
+            and receive the data from the receiver(then send to the client).
 
     Returns:
         If the server_ws sends a shutdown message normally, will return httpx_ws.WebSocketDisconnect.
@@ -300,13 +402,22 @@ async def _wait_server_then_send_to_client(
     Raises:
         error for receiving: refer to `_httpx_ws_receive_bytes_or_str`
         error for sending: refer to `_starlette_ws_send_bytes_or_str`
+        error for callback: refer to `MemoryObjectReceiveStream.receive` and `MemoryObjectSendStream.send`
     """
-    while True:
-        try:
-            receive = await _httpx_ws_receive_bytes_or_str(server_ws)
-        except httpx_ws.WebSocketDisconnect as e:
-            return e
-        else:
+    with pipe_context or nullcontext() as pipe:
+        while True:
+            try:
+                receive = await _httpx_ws_receive_bytes_or_str(server_ws)
+            except httpx_ws.WebSocketDisconnect as e:
+                return e
+
+            # TODO: do not use `if` statement in loop
+            if pipe is not None:
+                sender, receiver = pipe
+                # XXX, HACK, TODO: We can't identify the msg type from websocket,
+                # so we have to igonre the type check here.
+                await sender.send(receive)  # pyright: ignore [reportArgumentType]
+                receive = await receiver.receive()
             await _starlette_ws_send_bytes_or_str(client_ws, receive)
 
 
@@ -396,6 +507,14 @@ server_error: {server_error}\
 #################### # ####################
 
 
+_WsMsgTypeVar_CTS = TypeVarExt(
+    "_WsMsgTypeVar_CTS", bound=_WsMsgType, default=_DefaultWsMsgType
+)
+_WsMsgTypeVar_STC = TypeVarExt(
+    "_WsMsgTypeVar_STC", bound=_WsMsgType, default=_DefaultWsMsgType
+)
+
+
 class BaseWebSocketProxy(BaseProxyModel):
     """Websocket proxy base class.
 
@@ -408,7 +527,7 @@ class BaseWebSocketProxy(BaseProxyModel):
         keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][]
 
     Tip:
-        [`httpx_ws.aconnect_ws`](https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws)
+        [httpx_ws.aconnect_ws][]
     """
 
     client: httpx.AsyncClient
@@ -447,7 +566,7 @@ class BaseWebSocketProxy(BaseProxyModel):
             keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][]
 
         Tip:
-            [`httpx_ws.aconnect_ws`](https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws)
+            [httpx_ws.aconnect_ws][]
         """
         self.max_message_size_bytes = max_message_size_bytes
         self.queue_size = queue_size
@@ -456,11 +575,13 @@ class BaseWebSocketProxy(BaseProxyModel):
         super().__init__(client, follow_redirects=follow_redirects)
 
     @override
-    async def send_request_to_target(  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def send_request_to_target(
         self,
         *,
         websocket: starlette_ws.WebSocket,
         target_url: httpx.URL,
+        client_to_server_callback: Optional[_CallbackType[_WsMsgTypeVar_CTS]] = None,
+        server_to_client_callback: Optional[_CallbackType[_WsMsgTypeVar_STC]] = None,
     ) -> Union[Literal[False], StarletteResponse]:
         """Establish websocket connection for both client and target_url, then pass messages between them.
 
@@ -469,6 +590,61 @@ class BaseWebSocketProxy(BaseProxyModel):
         Args:
             websocket: The client websocket requests.
             target_url: The url of target websocket server.
+            client_to_server_callback: The callback function for processing data from client to server.
+                The usage example is in subclass [ReverseWebSocketProxy#with-callback][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy--with-callback].
+            server_to_client_callback: The callback function for processing data from server to client.
+                The usage example is in subclass [ReverseWebSocketProxy#with-callback][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy--with-callback].
+
+        ## callback implementation
+
+        Note: The `callback` implementation details:
+            - If `callback` is not None, will create a new task to run the callback function.
+                When the whole proxy task finishes, the callback task will be awaited, but the exception will be ignored.
+            - `callback` must ensure that it closes the pipe(exit the pipe context) when it finishes or encounters an exception.
+                - If the callback-side pipe is closed but proxy task is still running,
+                    `proxy` will treat it as a exception and close websocket connection.
+            - If `proxy` encounters an exception or receives a disconnection request, the proxy-side pipe will be closed,
+                then the callback-side pipe will receive an exception.
+            - **The buffer size of the pipe is currently 0 (this may change in the future)**,
+                which means that if the `callback` does not call the receiver, the `WebSocket` will block.
+                Therefore, the `callback` should not take too long to process a single message.
+                If you expect to be unable to call the receiver for an extended period,
+                you need to create your own buffer to store messages.
+
+            See also:
+
+            - [RFC#40](https://github.com/WSH032/fastapi-proxy-lib/issues/40)
+            - [memory-object-streams](https://anyio.readthedocs.io/en/stable/streams.html#memory-object-streams)
+
+        Bug: Dead lock
+            The current implementation only supports a strict `one-receive-one-send` mode within a single loop.
+            If this pattern is violated, such as `multiple receives and one send`, `one receive and multiple sends`,
+            or `sending before receiving` within a single loop, it will result in a deadlock.
+
+            See Issue Tracker: [#42](https://github.com/WSH032/fastapi-proxy-lib/issues/42)
+
+            ```py
+            async def callback(ctx: CallbackPipeContextType[str]) -> None:
+                with ctx as (sender, receiver):
+                    # multiple receives and one send, dead lock!
+                    await receiver.receive()
+                    await receiver.receive()
+                    await sender.send("foo")
+
+            async def callback(ctx: CallbackPipeContextType[str]) -> None:
+                with ctx as (sender, receiver):
+                    # one receive and multiple sends, dead lock!
+                    async for message in receiver:
+                        await sender.send("foo")
+                        await sender.send("bar")
+
+            async def callback(ctx: CallbackPipeContextType[str]) -> None:
+                with ctx as (sender, receiver):
+                    # sending before receiving, dead lock!
+                    await sender.send("foo")
+                    async for message in receiver:
+                        await sender.send(message)
+            ```
 
         Returns:
             If the establish websocket connection unsuccessfully:
@@ -559,6 +735,9 @@ class BaseWebSocketProxy(BaseProxyModel):
 
         # NOTE: 对于反向代理服务器，我们不返回 "任何" "具体的内部" 错误信息给客户端，因为这可能涉及到服务器内部的信息泄露
 
+        # NOTE: Do not exit the `stack` before return `StreamingResponse` above.
+        # Because once the `stack` close, the `httpx_ws` connection will be closed,
+        # then the streaming response will encounter an error.
         # NOTE: 请使用 with 语句来 "保证关闭" AsyncWebSocketSession
         async with stack:
             # TODO: websocket.accept 中还有一个headers参数，但是httpx_ws不支持，考虑发起PR
@@ -573,17 +752,34 @@ class BaseWebSocketProxy(BaseProxyModel):
                 # headers=...
             )
 
+            cts_pipe_ctx = (
+                await _enable_callback(
+                    client_to_server_callback, "client_to_server_callback", stack
+                )
+                if client_to_server_callback is not None
+                else None
+            )
             client_to_server_task = asyncio.create_task(
                 _wait_client_then_send_to_server(
                     client_ws=websocket,
                     server_ws=proxy_ws,
+                    pipe_context=cts_pipe_ctx,
                 ),
                 name="client_to_server_task",
+            )
+
+            stc_pipe_ctx = (
+                await _enable_callback(
+                    server_to_client_callback, "server_to_client_callback", stack
+                )
+                if server_to_client_callback is not None
+                else None
             )
             server_to_client_task = asyncio.create_task(
                 _wait_server_then_send_to_client(
                     client_ws=websocket,
                     server_ws=proxy_ws,
+                    pipe_context=stc_pipe_ctx,
                 ),
                 name="server_to_client_task",
             )
@@ -610,6 +806,8 @@ class BaseWebSocketProxy(BaseProxyModel):
             #   因为第二种情况的存在，所以需要用 wait_for 强制让其退出
             #   但考虑到第一种情况，先等它 1s ，看看能否正常退出
             try:
+                # Here we just cancel the task that is not finished,
+                # but we don't handle websocket closing here.
                 _, pending = await asyncio.wait(
                     task_group,
                     return_when=asyncio.FIRST_COMPLETED,
@@ -666,7 +864,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
         keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][]
 
     Tip:
-        [`httpx_ws.aconnect_ws`](https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws)
+        [httpx_ws.aconnect_ws][]
 
     Bug: There is a issue for handshake response:
         This WebSocket proxy can correctly forward request headers.
@@ -680,6 +878,8 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
         and regular WebSocket messages will be forwarded correctly.
 
     # # Examples
+
+    ## Basic usage
 
     ```python
     from contextlib import asynccontextmanager
@@ -704,9 +904,51 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
     async def _(websocket: WebSocket, path: str = ""):
         return await proxy.proxy(websocket=websocket, path=path)
 
-    # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
+    # Then run shell: `uvicorn <your_py>:app --host 127.0.0.1 --port 8000`
     # visit the app: `ws://127.0.0.1:8000/`
     # you can establish websocket connection with `ws://echo.websocket.events`
+    ```
+
+    ## With callback
+
+    See also: [`callback-implementation`][fastapi_proxy_lib.core.websocket.BaseWebSocketProxy.send_request_to_target--callback-implementation]
+
+    ```python
+    # NOTE: `CallbackPipeContextType` is a unstable public type hint,
+    # you shouldn't rely on it.
+    # You should create your own type hint instead.
+    from fastapi_proxy_lib.core.websocket import CallbackPipeContextType
+
+    # NOTE: Providing a specific type annotation for `CallbackPipeContextType`
+    # does not offer any runtime guarantees.
+    # This means that even if you annotate it as `[str]`,
+    # you may still receive `bytes` types,
+    # unless you are certain that the other end will only send `str`.
+    # The default generic is `[str | bytes]`.
+
+    async def client_to_server_callback(pipe_context: CallbackPipeContextType[str]) -> None:
+        with pipe_context as (sender, receiver):
+            async for message in receiver:
+                print(f"Received from client: {message}")
+                await sender.send(f"CTS:{message}")
+        print("client_to_server_callback end")
+
+
+    async def server_to_client_callback(pipe_context: CallbackPipeContextType[bytes]) -> None:
+        with pipe_context as (sender, receiver):
+            async for message in receiver:
+                print(f"Received from server: {message}")
+                await sender.send(f"STC:{message}".encode())  # `bytes` here
+        print("server_to_client_callback end")
+
+    @app.websocket("/{path:path}")
+    async def _(websocket: WebSocket, path: str = ""):
+        return await proxy.proxy(
+            websocket=websocket,
+            path=path,
+            client_to_server_callback=client_to_server_callback,
+            server_to_client_callback=server_to_client_callback,
+        )
     ```
     '''
 
@@ -753,7 +995,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
             keepalive_ping_timeout_seconds: refer to [httpx_ws.aconnect_ws][]
 
         Tip:
-            [`httpx_ws.aconnect_ws`](https://frankie567.github.io/httpx-ws/reference/httpx_ws/#httpx_ws.aconnect_ws)
+            [httpx_ws.aconnect_ws][]
         """
         self.base_url = check_base_url(base_url)
         super().__init__(
@@ -767,7 +1009,12 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
 
     @override
     async def proxy(  # pyright: ignore [reportIncompatibleMethodOverride]
-        self, *, websocket: starlette_ws.WebSocket, path: Optional[str] = None
+        self,
+        *,
+        websocket: starlette_ws.WebSocket,
+        path: Optional[str] = None,
+        client_to_server_callback: Optional[_CallbackType[_WsMsgTypeVar_CTS]] = None,
+        server_to_client_callback: Optional[_CallbackType[_WsMsgTypeVar_STC]] = None,
     ) -> Union[Literal[False], StarletteResponse]:
         """Establish websocket connection for both client and target_url, then pass messages between them.
 
@@ -776,6 +1023,12 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
             path: The path params of websocket request, which means the path params of base url.<br>
                 If None, will get it from `websocket.path_params`.<br>
                 **Usually, you don't need to pass this argument**.
+            client_to_server_callback: The callback function for processing data from client to server.
+                The implementation details are in the base class
+                [`BaseWebSocketProxy.send_request_to_target`][fastapi_proxy_lib.core.websocket.BaseWebSocketProxy.send_request_to_target--callback-implementation].
+            server_to_client_callback: The callback function for processing data from server to client.
+                The implementation details are in the base class
+                [`BaseWebSocketProxy.send_request_to_target`][fastapi_proxy_lib.core.websocket.BaseWebSocketProxy.send_request_to_target--callback-implementation].
 
         Returns:
             If the establish websocket connection unsuccessfully:
@@ -800,5 +1053,8 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
 
         # self.send_request_to_target 内部会处理连接失败时，返回错误给客户端，所以这里不处理了
         return await self.send_request_to_target(
-            websocket=websocket, target_url=target_url
+            websocket=websocket,
+            target_url=target_url,
+            client_to_server_callback=client_to_server_callback,
+            server_to_client_callback=server_to_client_callback,
         )

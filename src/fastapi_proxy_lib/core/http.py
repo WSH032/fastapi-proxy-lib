@@ -222,7 +222,7 @@ class BaseHttpProxy(BaseProxyModel):
     """
 
     @override
-    async def send_request_to_target(  # pyright: ignore [reportIncompatibleMethodOverride]
+    async def send_request_to_target(
         self, *, request: StarletteRequest, target_url: httpx.URL
     ) -> StarletteResponse:
         """Change request headers and send request to target url.
@@ -318,6 +318,8 @@ class ReverseHttpProxy(BaseHttpProxy):
 
     # # Examples
 
+    ## Basic usage
+
     ```python
     from contextlib import asynccontextmanager
     from typing import AsyncIterator
@@ -341,7 +343,7 @@ class ReverseHttpProxy(BaseHttpProxy):
     async def _(request: Request, path: str = ""):
         return await proxy.proxy(request=request, path=path)  # (3)!
 
-    # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
+    # Then run shell: `uvicorn <your_py>:app --host 127.0.0.1 --port 8000`
     # visit the app: `http://127.0.0.1:8000/`
     # you will get the response from `http://www.example.com/`
     ```
@@ -452,6 +454,8 @@ class ForwardHttpProxy(BaseHttpProxy):
 
     # # Examples
 
+    ## Basic usage
+
     ```python
     from contextlib import asynccontextmanager
     from typing import AsyncIterator
@@ -476,7 +480,7 @@ class ForwardHttpProxy(BaseHttpProxy):
     async def _(request: Request, path: str = ""):
         return await proxy.proxy(request=request, path=path)
 
-    # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
+    # Then run shell: `uvicorn <your_py>:app --host 127.0.0.1 --port 8000`
     # visit the app: `http://127.0.0.1:8000/http://www.example.com`
     # you will get the response from `http://www.example.com`
     ```
