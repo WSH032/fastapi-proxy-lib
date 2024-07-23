@@ -26,7 +26,7 @@ def test_forward_http_proxy() -> None:
     async def _(request: Request, path: str = ""):
         return await proxy.proxy(request=request, path=path)
 
-    # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
+    # Then run shell: `uvicorn <your_py>:app --host 127.0.0.1 --port 8000`
     # visit the app: `http://127.0.0.1:8000/http://www.example.com`
     # you will get the response from `http://www.example.com`
 
@@ -55,7 +55,7 @@ def test_reverse_http_proxy() -> None:
     async def _(request: Request, path: str = ""):
         return await proxy.proxy(request=request, path=path)  # (3)!
 
-    # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
+    # Then run shell: `uvicorn <your_py>:app --host 127.0.0.1 --port 8000`
     # visit the app: `http://127.0.0.1:8000/`
     # you will get the response from `http://www.example.com/`
 
@@ -93,7 +93,7 @@ def test_reverse_ws_proxy() -> None:
     async def _(websocket: WebSocket, path: str = ""):
         return await proxy.proxy(websocket=websocket, path=path)
 
-    # Then run shell: `uvicorn <your.py>:app --host http://127.0.0.1:8000 --port 8000`
+    # Then run shell: `uvicorn <your_py>:app --host 127.0.0.1 --port 8000`
     # visit the app: `ws://127.0.0.1:8000/`
     # you can establish websocket connection with `ws://echo.websocket.events`
 

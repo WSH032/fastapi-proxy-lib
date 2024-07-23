@@ -1,18 +1,30 @@
 # noqa: D100
 
-
 import asyncio
-from contextlib import AsyncExitStack
+import gc
+from contextlib import AsyncExitStack, asynccontextmanager
 from multiprocessing import Process, Queue
-from typing import Any, Dict, Literal, Optional
+from typing import Any, AsyncIterator, Dict, Literal, Optional, Protocol
 
+import anyio
 import httpx
 import httpx_ws
 import pytest
 import uvicorn
+from anyio import move_on_after
+from fastapi import FastAPI
+from fastapi_proxy_lib.core.websocket import (
+    CallbackPipeContextType,
+    ReverseWebSocketProxy,
+    # from this project, so it's ok
+    _CallbackType,  # pyright: ignore[reportPrivateUsage]
+    _WsMsgTypeVar_CTS,  # pyright: ignore[reportPrivateUsage]
+    _WsMsgTypeVar_STC,  # pyright: ignore[reportPrivateUsage]
+)
 from fastapi_proxy_lib.fastapi.app import reverse_ws_app as get_reverse_ws_app
 from httpx_ws import aconnect_ws
 from starlette import websockets as starlette_websockets_module
+from starlette.websockets import WebSocket as StarletteWebSocket
 from typing_extensions import override
 
 from .app.echo_ws_app import get_app as get_ws_test_app
@@ -35,6 +47,22 @@ WS_BACKENDS_NEED_BE_TESTED = ("websockets",)
 
 # https://www.python-httpx.org/advanced/#http-proxying
 NO_PROXIES: Dict[Any, Any] = {"all://": None}
+
+
+class WsAppFactory(Protocol):
+    """The factory for `Tool4TestFixture`."""
+
+    def __call__(self, client: httpx.AsyncClient, *, base_url: str) -> FastAPI:
+        """Return the ws proxy app for testing."""
+        ...
+
+
+class Tool4TestFixtureFactory(Protocol):
+    """The factory for `Tool4TestFixture`."""
+
+    async def __call__(self, ws_app_factory: WsAppFactory) -> Tool4TestFixture:
+        """See the implementation for details."""
+        ...
 
 
 def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
@@ -101,54 +129,109 @@ def _subprocess_run_httpx_ws(
     asyncio.run(run())
 
 
+def callback_ws_app_factory_builder(
+    client_to_server_callback: Optional[_CallbackType[_WsMsgTypeVar_CTS]] = None,
+    server_to_client_callback: Optional[_CallbackType[_WsMsgTypeVar_STC]] = None,
+) -> WsAppFactory:
+    """Return a ws proxy app factory with callback."""
+
+    def callback_ws_app_factory(client: httpx.AsyncClient, *, base_url: str) -> FastAPI:
+        """Return a ws proxy app with callback."""
+        proxy = ReverseWebSocketProxy(
+            client=client,
+            base_url=base_url,
+        )
+
+        @asynccontextmanager
+        async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
+            """Close proxy."""
+            yield
+            await proxy.aclose()
+
+        app = FastAPI(lifespan=close_proxy_event)
+
+        @app.websocket("/{path:path}")
+        async def _(websocket: StarletteWebSocket, path: str = ""):
+            return await proxy.proxy(
+                websocket=websocket,
+                path=path,
+                client_to_server_callback=client_to_server_callback,
+                server_to_client_callback=server_to_client_callback,
+            )
+
+        return app
+
+    return callback_ws_app_factory
+
+
 class TestReverseWsProxy(AbstractTestProxy):
     """For testing reverse websocket proxy."""
 
-    @override
     @pytest.fixture(params=WS_BACKENDS_NEED_BE_TESTED)
-    async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
+    def tool_4_test_fixture_factory(
         self,
         uvicorn_server_fixture: UvicornServerFixture,
         request: pytest.FixtureRequest,
-    ) -> Tool4TestFixture:
+    ) -> Tool4TestFixtureFactory:
         """目标服务器请参考`tests.app.echo_ws_app.get_app`."""
-        echo_ws_test_model = get_ws_test_app()
-        echo_ws_app = echo_ws_test_model.app
-        echo_ws_get_request = echo_ws_test_model.get_request
 
-        target_ws_server = await uvicorn_server_fixture(
-            uvicorn.Config(
-                echo_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
-            ),
-            contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
-        )
+        async def _tool_4_test_fixture_factory(
+            ws_app_factory: WsAppFactory,
+        ) -> Tool4TestFixture:
+            """Create a tool for testing reverse websocket proxy.
 
-        target_server_base_url = str(target_ws_server.contx_socket_url)
+            Args:
+                ws_app_factory: A app factory for create reverse proxy websocket app,
+            """
+            echo_ws_test_model = get_ws_test_app()
+            echo_ws_app = echo_ws_test_model.app
+            echo_ws_get_request = echo_ws_test_model.get_request
 
-        client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
+            target_ws_server = await uvicorn_server_fixture(
+                uvicorn.Config(
+                    echo_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
+                ),
+                contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
+            )
 
-        reverse_ws_app = get_reverse_ws_app(
-            client=client_for_conn_to_target_server, base_url=target_server_base_url
-        )
+            target_server_base_url = str(target_ws_server.contx_socket_url)
 
-        proxy_ws_server = await uvicorn_server_fixture(
-            uvicorn.Config(
-                reverse_ws_app, port=DEFAULT_PORT, host=DEFAULT_HOST, ws=request.param
-            ),
-            contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
-        )
+            client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
 
-        proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
+            reverse_ws_app = ws_app_factory(
+                client=client_for_conn_to_target_server, base_url=target_server_base_url
+            )
 
-        client_for_conn_to_proxy_server = httpx.AsyncClient(proxies=NO_PROXIES)
+            proxy_ws_server = await uvicorn_server_fixture(
+                uvicorn.Config(
+                    reverse_ws_app,
+                    port=DEFAULT_PORT,
+                    host=DEFAULT_HOST,
+                    ws=request.param,
+                ),
+                contx_exit_timeout=DEFAULT_CONTX_EXIT_TIMEOUT,
+            )
 
-        return Tool4TestFixture(
-            client_for_conn_to_target_server=client_for_conn_to_target_server,
-            client_for_conn_to_proxy_server=client_for_conn_to_proxy_server,
-            get_request=echo_ws_get_request,
-            target_server_base_url=target_server_base_url,
-            proxy_server_base_url=proxy_server_base_url,
-        )
+            proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
+
+            client_for_conn_to_proxy_server = httpx.AsyncClient(proxies=NO_PROXIES)
+
+            return Tool4TestFixture(
+                client_for_conn_to_target_server=client_for_conn_to_target_server,
+                client_for_conn_to_proxy_server=client_for_conn_to_proxy_server,
+                get_request=echo_ws_get_request,
+                target_server_base_url=target_server_base_url,
+                proxy_server_base_url=proxy_server_base_url,
+            )
+
+        return _tool_4_test_fixture_factory
+
+    @override
+    @pytest.fixture()
+    async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, tool_4_test_fixture_factory: Tool4TestFixtureFactory
+    ) -> Tool4TestFixture:
+        return await tool_4_test_fixture_factory(get_reverse_ws_app)
 
     @pytest.mark.anyio()
     async def test_ws_proxy(self, tool_4_test_fixture: Tool4TestFixture) -> None:
@@ -313,3 +396,160 @@ class TestReverseWsProxy(AbstractTestProxy):
                 # 只要第二个客户端不是在之前40s基础上又重复40s，就暂时没问题，
                 # 因为这模拟了多个客户端进行连接的情况。
                 assert (seconde_ws_recv_end - seconde_ws_recv_start) < 2
+
+    @pytest.mark.timeout(15)  # prevent dead lock
+    @pytest.mark.anyio()
+    async def test_ws_proxy_with_callback(
+        self, tool_4_test_fixture_factory: Tool4TestFixtureFactory
+    ) -> None:
+        """Test reverse websocket proxy with callback."""
+        msg = "foo"
+        cts_prefix = "CTS:"
+        stc_prefix = "STC:"
+
+        cts_cb_receive = None
+        stc_cb_receive = None
+        cts_cb_done = anyio.Event()
+        stc_cb_done = anyio.Event()
+
+        async def client_to_server_callback(
+            pipe_context: CallbackPipeContextType[str],
+        ) -> None:
+            nonlocal cts_cb_receive, cts_cb_done
+            with pipe_context as (sender, receiver):
+                async for message in receiver:
+                    cts_cb_receive = message
+                    await sender.send(f"{cts_prefix}{message}")
+            cts_cb_done.set()
+
+        async def server_to_client_callback(
+            pipe_context: CallbackPipeContextType[str],
+        ) -> None:
+            with pipe_context as (sender, receiver):
+                nonlocal stc_cb_receive, stc_cb_done
+                async for message in receiver:
+                    stc_cb_receive = message
+                    await sender.send(f"{stc_prefix}{message}")
+            stc_cb_done.set()
+
+        tool_4_test_fixture = await tool_4_test_fixture_factory(
+            callback_ws_app_factory_builder(
+                client_to_server_callback=client_to_server_callback,
+                server_to_client_callback=server_to_client_callback,
+            )
+        )
+        proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
+        client_for_conn_to_proxy_server = (
+            tool_4_test_fixture.client_for_conn_to_proxy_server
+        )
+        get_request = tool_4_test_fixture.get_request
+
+        async with aconnect_ws(
+            proxy_server_base_url + "echo_text", client_for_conn_to_proxy_server
+        ) as ws:
+            await ws.send_text(msg)
+
+            assert (
+                await ws.receive_text() == f"{stc_prefix}{cts_prefix}{msg}"
+            ), "cts send wrong message"
+            assert cts_cb_receive == msg, "cts receive wrong message"
+            assert (
+                stc_cb_receive == f"{cts_prefix}{msg}"
+            ), "cts send wrong message or stc receive wrong message"
+
+        with move_on_after(2) as scope:
+            await cts_cb_done.wait()
+            await stc_cb_done.wait()
+        assert (
+            not scope.cancelled_caught
+        ), "after proxy finished, callback not done or done too late"
+
+        target_starlette_ws = get_request()
+        assert isinstance(target_starlette_ws, starlette_websockets_module.WebSocket)
+        # test target ws has disconnected
+        with pytest.raises(RuntimeError):
+            await target_starlette_ws.receive_text()
+
+    @pytest.mark.timeout(15)  # prevent dead lock
+    @pytest.mark.anyio()
+    @pytest.mark.parametrize("forget_to_enter_pipe", [True, False])
+    async def test_ws_callback_error(
+        self,
+        tool_4_test_fixture_factory: Tool4TestFixtureFactory,
+        forget_to_enter_pipe: bool,
+    ) -> None:
+        """Test reverse websocket proxy with callback that will raise error."""
+        msg = "foo"
+        raise_exception_event = anyio.Event()
+
+        async def client_to_server_callback(
+            pipe_context: CallbackPipeContextType[str],
+        ) -> None:
+            """We do nothing, just raise exception."""
+            if not forget_to_enter_pipe:
+                # NOTE: we must ensure that exit the context manager to close the pipe,
+                # or will get dead lock.
+                with pipe_context as (_sender, _receiver):
+                    await raise_exception_event.wait()
+                    raise Exception()
+            else:
+                # Here, we forget to enter the pipe context, so the context never be exited.
+                # Because there are some mitigation measures, we will not get dead lock,
+                # but we still get warning.
+                await raise_exception_event.wait()
+                raise Exception()
+
+        class NullContext:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def __enter__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def __exit__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+        def null_collector() -> None:
+            pass
+
+        if not forget_to_enter_pipe:
+            # use `gc.collect` to make sure `__del__` method of pipe context be called,
+            # so that we can get the warning.
+            warning_capturer, gc_collector = pytest.warns, gc.collect
+        else:
+            warning_capturer, gc_collector = NullContext, null_collector
+
+        with warning_capturer(
+            RuntimeWarning,
+            match="You never exit the pipe context, it may cause a deadlock.",
+        ):
+            tool_4_test_fixture = await tool_4_test_fixture_factory(
+                callback_ws_app_factory_builder(
+                    client_to_server_callback=client_to_server_callback,
+                )
+            )
+            proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
+            client_for_conn_to_proxy_server = (
+                tool_4_test_fixture.client_for_conn_to_proxy_server
+            )
+            get_request = tool_4_test_fixture.get_request
+
+            async with aconnect_ws(
+                proxy_server_base_url + "echo_text", client_for_conn_to_proxy_server
+            ) as ws:
+                await ws.send_text(msg)
+                raise_exception_event.set()
+
+                # client ws has disconnected
+                with pytest.raises(httpx_ws.WebSocketDisconnect):
+                    await ws.receive_text()
+
+            target_starlette_ws = get_request()
+            assert isinstance(
+                target_starlette_ws, starlette_websockets_module.WebSocket
+            )
+            # test target ws has disconnected
+            with pytest.raises(RuntimeError):
+                await target_starlette_ws.receive_text()
+
+            gc_collector()

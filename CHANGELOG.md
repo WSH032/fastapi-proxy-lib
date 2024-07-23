@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- [#41](https://github.com/WSH032/fastapi-proxy-lib/pull/41) - feat: add `callback` api to `WebSocketProxy`. Thanks [@WSH032](https://github.com/WSH032) and [@IvesAwadi](https://github.com/IvesAwadi)!
+
 ### Changed
 
 - [#30](https://github.com/WSH032/fastapi-proxy-lib/pull/30) - fix(internal): use `websocket` in favor of `websocket_route`. Thanks [@WSH032](https://github.com/WSH032)!
