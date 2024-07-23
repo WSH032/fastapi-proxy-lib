@@ -4,7 +4,8 @@ For the following scenarios, you might prefer [fastapi_proxy_lib.core][]:
 
 - When you need to use proxies with **only** `Starlette` dependencies (without `FastAPI`).
 - When you need more fine-grained control over parameters and lifespan event.
-- When you need to further process the input and output before and after the proxy (similar to middleware).
+- When you need to further process the input and output before and after the http proxy (similar to `middleware`).
+- When you need `callback` to modify the websocket proxy messages.
 
 We will demonstrate with `FastAPI`,
 but you can completely switch to the `Starlette` approach,
@@ -19,13 +20,13 @@ Also (without annotations):
 - [`ForwardHttpProxy#examples`][fastapi_proxy_lib.core.http.ForwardHttpProxy--examples]
 - [`ReverseWebSocketProxy#examples`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy--examples]
 
-## Modify request
+## Modify HTTP request
 
 In some cases, you may want to make final modifications before sending a request, such as performing behind-the-scenes authentication by modifying the headers of request.
 
 `httpx` provides comprehensive authentication support, and `fastapi-proxy-lib` offers first-class support for `httpx`.
 
-See <https://www.python-httpx.org/advanced/#customizing-authentication>
+See <https://www.python-httpx.org/advanced/authentication/>
 
 You can refer following example to implement a simple authentication:
 
@@ -35,7 +36,7 @@ from fastapi_proxy_lib.fastapi.app import reverse_http_app
 
 
 class MyCustomAuth(httpx.Auth):
-    # ref: https://www.python-httpx.org/advanced/#customizing-authentication
+    # ref: https://www.python-httpx.org/advanced/authentication/
 
     def __init__(self, token: str):
         self.token = token
@@ -55,7 +56,7 @@ app = reverse_http_app(
 
 visit `/headers` to see the result which contains `"X-Authentication": "bearer_token"` header.
 
-## Modify response
+## Modify HTTP response
 
 In some cases, you may want to make final modifications before return the response to the client, such as transcoding video response streams.
 
@@ -118,3 +119,19 @@ async def _(request: Request, path: str = ""):
 ```
 
 visit `/`, you will notice that the response body is printed to the console.
+
+## Modify WebSocket message
+
+In some cases, you might want to modify the content of the messages that the WebSocket proxy receives and sends to the client and target server.
+
+In version `0.2.0` of `fastapi-proxy-lib`, we introduced a [`callback API`][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy.proxy] for `WebSocketProxy` to allow you to do this.
+
+See example: [ReverseWebSocketProxy#with-callback][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy--with-callback]
+
+Also:
+
+- RFC: [#40](https://github.com/WSH032/fastapi-proxy-lib/issues/40)
+- PR: [#41](https://github.com/WSH032/fastapi-proxy-lib/pull/41)
+
+!!!example
+    The current implementation still has some defects. Read the [callback-implementation][fastapi_proxy_lib.core.websocket.BaseWebSocketProxy.send_request_to_target--callback-implementation] section, or you might accidentally shoot yourself in the foot.

@@ -32,8 +32,9 @@ Source Code: <https://github.com/WSH032/fastapi-proxy-lib/>
 - [x] Support both **reverse** proxy and **forward** proxy.
 - [x] **Transparently** and **losslessly** handle all proxy requests,
     Including **HTTP headers**, **cookies**, **query parameters**, **body**, etc.
+- [X] WebSocket proxy **callback**.
 - [x] Asynchronous streaming transfer, support **file proxy**.
-- [x] `fastapi-proxy-lib` value [privacy security](https://wsh032.github.io/fastapi-proxy-lib/Usage/Security/).
+- [x] `fastapi-proxy-lib` value [**privacy security**](https://wsh032.github.io/fastapi-proxy-lib/Usage/Security/).
 
 ### other features
 

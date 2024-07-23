@@ -10,7 +10,7 @@ There are two helper modules to get FastAPI `app`/`router` for proxy convenientl
 
 ## app
 
-use `fastapi_proxy_lib.fastapi.app` is very convenient and out of the box, there are three helper functions:
+`fastapi_proxy_lib.fastapi.app` is very convenient and out of the box, there are three helper functions:
 
 - [forward_http_app][fastapi_proxy_lib.fastapi.app.forward_http_app]
 - [reverse_http_app][fastapi_proxy_lib.fastapi.app.reverse_http_app]
@@ -46,3 +46,9 @@ For the following scenarios, you might prefer [fastapi_proxy_lib.fastapi.router]
 - When you need to [mount the proxy on a route of larger app](https://fastapi.tiangolo.com/tutorial/bigger-applications/).
 
 **^^[Please refer to the documentation of `RouterHelper` for more information :material-file-document: ][fastapi_proxy_lib.fastapi.router.RouterHelper--examples]^^**.
+
+---
+
+## More
+
+**The `Helper Module` might not meet your further customization needs. Please refer to the [Advanced](Advanced.md) section, which is the core of `fastapi-proxy-lib`, for more personalization options.**

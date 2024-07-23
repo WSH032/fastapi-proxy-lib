@@ -81,11 +81,20 @@ _CallbackPipeType = Tuple[
 CallbackPipeContextType = ContextManager[_CallbackPipeType[_WsMsgTypeVar]]
 """A context manager that will automatically close the pipe when exit.
 
+The `__enter__` method will return one end of each pair of
+[`memory-object-streams`](https://anyio.readthedocs.io/en/stable/streams.html#memory-object-streams) pipelines.
+
+See example: [ReverseWebSocketProxy#with-callback][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy--with-callback]
+
 Warning:
     This is a unstable public type hint, you shouldn't rely on it.
     You should create your own type hint instead.
 
-See example: [ReverseWebSocketProxy#with-callback][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy--with-callback]
+Note:
+    You must ensure that **exit** the context manager,
+    or maybe you will get a **deadlock**.
+
+    See: [`callback-implementation`][fastapi_proxy_lib.core.websocket.BaseWebSocketProxy.send_request_to_target--callback-implementation]
 """
 _CallbackType = Callable[
     [CallbackPipeContextType[_WsMsgTypeVar]], Coroutine[None, None, None]
@@ -962,7 +971,8 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
 
     ## With callback
 
-    See also: [`callback-implementation`][fastapi_proxy_lib.core.websocket.BaseWebSocketProxy.send_request_to_target--callback-implementation]
+    Tip:
+        See also: [`callback-implementation`][fastapi_proxy_lib.core.websocket.BaseWebSocketProxy.send_request_to_target--callback-implementation]
 
     ```python
     # NOTE: `CallbackPipeContextType` is a unstable public type hint,
@@ -981,10 +991,14 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
         with pipe_context as (sender, receiver):
             async for message in receiver:
                 print(f"Received from client: {message}")
+                # here we modify the message with `CTS:` prefix
                 await sender.send(f"CTS:{message}")
+        # If `proxy` receives a disconnection request and websocket closed correctly,
+        # this message will be printed. Or not, if exception occurs.
         print("client_to_server_callback end")
 
-
+    # we give a `bytes` type hint here, but it has no runtime guarantee,
+    # just make type-checker happy
     async def server_to_client_callback(pipe_context: CallbackPipeContextType[bytes]) -> None:
         with pipe_context as (sender, receiver):
             async for message in receiver:
@@ -997,6 +1011,7 @@ class ReverseWebSocketProxy(BaseWebSocketProxy):
         return await proxy.proxy(
             websocket=websocket,
             path=path,
+            # register callback
             client_to_server_callback=client_to_server_callback,
             server_to_client_callback=server_to_client_callback,
         )
