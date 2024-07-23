@@ -2,10 +2,12 @@
 
 import asyncio
 import logging
+import warnings
 from contextlib import (
+    AbstractContextManager,
     AsyncExitStack,
+    ExitStack,
     asynccontextmanager,
-    contextmanager,
     nullcontext,
 )
 from typing import (
@@ -15,7 +17,7 @@ from typing import (
     Callable,
     ContextManager,
     Coroutine,
-    Iterator,
+    Generic,
     List,
     Literal,
     NamedTuple,
@@ -134,14 +136,35 @@ def _get_client_request_subprotocols(ws_scope: Scope) -> Union[List[str], None]:
     return subprotocols
 
 
-@contextmanager
-def _pipe_context_builder(
-    raw_pipe: _CallbackPipeType[_WsMsgTypeVar],
-) -> Iterator[_CallbackPipeType[_WsMsgTypeVar]]:
+class _PipeContextBuilder(
+    # before py3.9, `AbstractContextManager` is not generic
+    AbstractContextManager,  # pyright: ignore[reportMissingTypeArgument]
+    Generic[_WsMsgTypeVar],
+):
     """Auto close the pipe when exit the context."""
-    sender, receiver = raw_pipe
-    with sender, receiver:
-        yield raw_pipe
+
+    def __init__(self, raw_pipe: _CallbackPipeType[_WsMsgTypeVar]) -> None:
+        self._raw_pipe = raw_pipe
+        self._exit_stack = ExitStack()
+        self._exited = False
+
+    def __enter__(self) -> _CallbackPipeType[_WsMsgTypeVar]:
+        sender, receiver = self._raw_pipe
+        self._exit_stack.enter_context(sender)
+        self._exit_stack.enter_context(receiver)
+        return self._raw_pipe
+
+    def __exit__(self, *_: Any) -> None:
+        self._exit_stack.__exit__(*_)
+        self._exited = True
+
+    def __del__(self):
+        if not self._exited:
+            warnings.warn(
+                "You never exit the pipe context, it may cause a deadlock.",
+                RuntimeWarning,
+                stacklevel=1,
+            )
 
 
 @asynccontextmanager
@@ -161,8 +184,17 @@ async def _enable_callback(
 ) -> CallbackPipeContextType[_WsMsgTypeVar]:
     """Create a task to run the callback.
 
-    The callback task will be awaited when exit the `exit_stack`,
-    but the exception of callback task will be ignored.
+    - The callback task will be awaited when exit the `exit_stack`,
+        but the exception of callback task will be ignored.
+    - When the callback done(normal or exception),
+        the pipe used in the callback will be closed;
+        this is for preventing callback forgetting to close the pipe and causing deadlock.
+        ```py
+        async def callback(ctx: CallbackPipeContextType[str]) -> None:
+            pass
+        ```
+        NOTE: This is just a mitigation measure and may be removed in the future,
+        so it needs to be documented in the public documentation.
     """
     proxy_sender, cb_receiver = create_memory_object_stream[_WsMsgTypeVar](
         _CALLBACK_BUFFER_SIZE
@@ -170,10 +202,14 @@ async def _enable_callback(
     cb_sender, proxy_receiver = create_memory_object_stream[_WsMsgTypeVar](
         _CALLBACK_BUFFER_SIZE
     )
-    cb_pipe_ctx = _pipe_context_builder((cb_sender, cb_receiver))
-    proxy_pipe_ctx = _pipe_context_builder((proxy_sender, proxy_receiver))
+    cb_pipe_ctx = _PipeContextBuilder((cb_sender, cb_receiver))
+    proxy_pipe_ctx = _PipeContextBuilder((proxy_sender, proxy_receiver))
 
     cb_task = asyncio.create_task(callback(cb_pipe_ctx), name=task_name)
+    # use `done_callback` to close the pipe when the callback task is done,
+    # NOTE: we close `sender` and `receiver` directly, instead of using `cb_pipe_ctx.__exit__`,
+    # so that `_PipeContextBuilder` issue a warning when the callback forgets to close the pipe.
+    cb_task.add_done_callback(lambda _: (cb_sender.close(), cb_receiver.close()))
     await exit_stack.enter_async_context(_wait_task_and_ignore_exce(cb_task))
     return proxy_pipe_ctx
 
@@ -595,16 +631,31 @@ class BaseWebSocketProxy(BaseProxyModel):
             server_to_client_callback: The callback function for processing data from server to client.
                 The usage example is in subclass [ReverseWebSocketProxy#with-callback][fastapi_proxy_lib.core.websocket.ReverseWebSocketProxy--with-callback].
 
-        ## callback implementation
+        ## Callback implementation
 
         Note: The `callback` implementation details:
             - If `callback` is not None, will create a new task to run the callback function.
                 When the whole proxy task finishes, the callback task will be awaited, but the exception will be ignored.
-            - `callback` must ensure that it closes the pipe(exit the pipe context) when it finishes or encounters an exception.
+            - `callback` must ensure that it closes the pipe(exit the pipe context) when it finishes or encounters an exception,
+                or you will get a **deadlock**.
+                - A common mistake is the `callback` encountering an exception or returning before entering the context.
+                    ```py
+                    async def callback(ctx: CallbackPipeContextType[str]) -> None:
+                        # mistake: not entering the context
+                        return
+
+                    async def callback(ctx: CallbackPipeContextType[str]) -> None:
+                        # mistake: encountering an exception before entering the context
+                        1 / 0
+                        with ctx as (sender, receiver):
+                            pass
+                    ```
                 - If the callback-side pipe is closed but proxy task is still running,
                     `proxy` will treat it as a exception and close websocket connection.
             - If `proxy` encounters an exception or receives a disconnection request, the proxy-side pipe will be closed,
-                then the callback-side pipe will receive an exception.
+                then the callback-side pipe will receive an exception
+                (refer to [send][anyio.streams.memory.MemoryObjectSendStream.send],
+                also [receive][anyio.streams.memory.MemoryObjectReceiveStream.receive]).
             - **The buffer size of the pipe is currently 0 (this may change in the future)**,
                 which means that if the `callback` does not call the receiver, the `WebSocket` will block.
                 Therefore, the `callback` should not take too long to process a single message.

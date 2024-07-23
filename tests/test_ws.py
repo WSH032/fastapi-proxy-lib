@@ -1,7 +1,7 @@
 # noqa: D100
 
-
 import asyncio
+import gc
 from contextlib import AsyncExitStack, asynccontextmanager
 from multiprocessing import Process, Queue
 from typing import Any, AsyncIterator, Dict, Literal, Optional, Protocol
@@ -472,8 +472,11 @@ class TestReverseWsProxy(AbstractTestProxy):
 
     @pytest.mark.timeout(15)  # prevent dead lock
     @pytest.mark.anyio()
+    @pytest.mark.parametrize("forget_to_enter_pipe", [True, False])
     async def test_ws_callback_error(
-        self, tool_4_test_fixture_factory: Tool4TestFixtureFactory
+        self,
+        tool_4_test_fixture_factory: Tool4TestFixtureFactory,
+        forget_to_enter_pipe: bool,
     ) -> None:
         """Test reverse websocket proxy with callback that will raise error."""
         msg = "foo"
@@ -483,35 +486,70 @@ class TestReverseWsProxy(AbstractTestProxy):
             pipe_context: CallbackPipeContextType[str],
         ) -> None:
             """We do nothing, just raise exception."""
-            # NOTE: we must ensure that exit the context manager to close the pipe,
-            # or will get dead lock.
-            with pipe_context as (_sender, _receiver):
+            if not forget_to_enter_pipe:
+                # NOTE: we must ensure that exit the context manager to close the pipe,
+                # or will get dead lock.
+                with pipe_context as (_sender, _receiver):
+                    await raise_exception_event.wait()
+                    raise Exception()
+            else:
+                # Here, we forget to enter the pipe context, so the context never be exited.
+                # Because there are some mitigation measures, we will not get dead lock,
+                # but we still get warning.
                 await raise_exception_event.wait()
                 raise Exception()
 
-        tool_4_test_fixture = await tool_4_test_fixture_factory(
-            callback_ws_app_factory_builder(
-                client_to_server_callback=client_to_server_callback,
+        class NullContext:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def __enter__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            def __exit__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+        def null_collector() -> None:
+            pass
+
+        if not forget_to_enter_pipe:
+            # use `gc.collect` to make sure `__del__` method of pipe context be called,
+            # so that we can get the warning.
+            warning_capturer, gc_collector = pytest.warns, gc.collect
+        else:
+            warning_capturer, gc_collector = NullContext, null_collector
+
+        with warning_capturer(
+            RuntimeWarning,
+            match="You never exit the pipe context, it may cause a deadlock.",
+        ):
+            tool_4_test_fixture = await tool_4_test_fixture_factory(
+                callback_ws_app_factory_builder(
+                    client_to_server_callback=client_to_server_callback,
+                )
             )
-        )
-        proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
-        client_for_conn_to_proxy_server = (
-            tool_4_test_fixture.client_for_conn_to_proxy_server
-        )
-        get_request = tool_4_test_fixture.get_request
+            proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
+            client_for_conn_to_proxy_server = (
+                tool_4_test_fixture.client_for_conn_to_proxy_server
+            )
+            get_request = tool_4_test_fixture.get_request
 
-        async with aconnect_ws(
-            proxy_server_base_url + "echo_text", client_for_conn_to_proxy_server
-        ) as ws:
-            await ws.send_text(msg)
-            raise_exception_event.set()
+            async with aconnect_ws(
+                proxy_server_base_url + "echo_text", client_for_conn_to_proxy_server
+            ) as ws:
+                await ws.send_text(msg)
+                raise_exception_event.set()
 
-            # client ws has disconnected
-            with pytest.raises(httpx_ws.WebSocketDisconnect):
-                await ws.receive_text()
+                # client ws has disconnected
+                with pytest.raises(httpx_ws.WebSocketDisconnect):
+                    await ws.receive_text()
 
-        target_starlette_ws = get_request()
-        assert isinstance(target_starlette_ws, starlette_websockets_module.WebSocket)
-        # test target ws has disconnected
-        with pytest.raises(RuntimeError):
-            await target_starlette_ws.receive_text()
+            target_starlette_ws = get_request()
+            assert isinstance(
+                target_starlette_ws, starlette_websockets_module.WebSocket
+            )
+            # test target ws has disconnected
+            with pytest.raises(RuntimeError):
+                await target_starlette_ws.receive_text()
+
+            gc_collector()
