@@ -22,12 +22,13 @@ from typing import (
 import pytest
 import uvicorn
 from asgi_lifespan import LifespanManager
+from typing_extensions import ParamSpec
+
 from fastapi_proxy_lib.fastapi.app import (
     forward_http_app,
     reverse_http_app,
     reverse_ws_app,
 )
-from typing_extensions import ParamSpec
 
 from .app.echo_http_app import get_app as get_http_test_app
 from .app.echo_ws_app import get_app as get_ws_test_app
@@ -69,13 +70,13 @@ class UvicornServerFixture(Protocol):  # noqa: D101
 
 
 # https://anyio.readthedocs.io/en/stable/testing.html#specifying-the-backends-to-run-on
-@pytest.fixture()
+@pytest.fixture
 def anyio_backend() -> Literal["asyncio"]:
     """Specify the async backend for `pytest.mark.anyio`."""
     return "asyncio"
 
 
-@pytest.fixture()
+@pytest.fixture
 async def lifespan_manager() -> AsyncIterator[LifespanManagerFixture]:
     """Fixture for asgi lifespan manager.
 
@@ -104,7 +105,7 @@ async def lifespan_manager() -> AsyncIterator[LifespanManagerFixture]:
 # 所以这里明确要求每个fixture的作用域都是"function"，不要共享 TestAppDataclass
 
 
-@pytest.fixture()
+@pytest.fixture
 async def echo_http_test_model(
     lifespan_manager: LifespanManagerFixture,
 ) -> LifeAppDataclass4Test:
@@ -120,7 +121,7 @@ async def echo_http_test_model(
     return LifeAppDataclass4Test(app=life_app, request_dict=app_dataclass.request_dict)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def echo_ws_test_model(
     lifespan_manager: LifespanManagerFixture,
 ) -> LifeAppDataclass4Test:
@@ -158,7 +159,7 @@ def _app_fct_life_wapper(  # noqa: D417
     return wappered_app_fct
 
 
-@pytest.fixture()
+@pytest.fixture
 def forward_http_app_fct(
     lifespan_manager: LifespanManagerFixture,
 ):  # -> AppFactoryFixture
@@ -169,7 +170,7 @@ def forward_http_app_fct(
     return _app_fct_life_wapper(forward_http_app, lifespan_manager)
 
 
-@pytest.fixture()
+@pytest.fixture
 def reverse_http_app_fct(
     lifespan_manager: LifespanManagerFixture,
 ):  # -> AppFactoryFixture
@@ -180,7 +181,7 @@ def reverse_http_app_fct(
     return _app_fct_life_wapper(reverse_http_app, lifespan_manager)
 
 
-@pytest.fixture()
+@pytest.fixture
 def reverse_ws_app_fct(
     lifespan_manager: LifespanManagerFixture,
 ):  # -> AppFactoryFixture
@@ -191,7 +192,7 @@ def reverse_ws_app_fct(
     return _app_fct_life_wapper(reverse_ws_app, lifespan_manager)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def uvicorn_server_fixture() -> AsyncIterator[UvicornServerFixture]:
     """Fixture for UvicornServer.
 

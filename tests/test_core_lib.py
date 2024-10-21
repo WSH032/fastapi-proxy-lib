@@ -3,6 +3,8 @@
 import httpx
 import pytest
 from fastapi import APIRouter, FastAPI
+from starlette.responses import JSONResponse
+
 from fastapi_proxy_lib.core._tool import (
     BaseURLError,
     ErrMsg,
@@ -13,7 +15,6 @@ from fastapi_proxy_lib.core._tool import (
 from fastapi_proxy_lib.core.http import ReverseHttpProxy
 from fastapi_proxy_lib.fastapi.app import forward_http_app, reverse_http_app
 from fastapi_proxy_lib.fastapi.router import RouterHelper
-from starlette.responses import JSONResponse
 
 from .tool import DEFAULT_URL
 
@@ -42,7 +43,7 @@ def test_base_url_cheking_when_init() -> None:
         assert check_base_url("http://www.echo.com/?p=1#foo") == "http://www.echo.com/"
 
 
-@pytest.mark.anyio()
+@pytest.mark.anyio
 async def test_func_return_err_msg_response() -> None:
     """Test `fastapi_proxy_lib.core._tool.return_err_msg_response()`."""
 
