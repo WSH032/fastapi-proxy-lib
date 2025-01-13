@@ -1,6 +1,8 @@
 # noqa: D100
 
 
+import logging
+
 import httpx
 import pytest
 from fastapi_proxy_lib.core.tool import default_proxy_filter
@@ -239,6 +241,27 @@ class TestReverseHttpProxy(AbstractTestProxy):
         )
         assert "foo" not in r.json()  # not leaked
         assert r.json()["a"] == "b"  # send cookies normally
+
+    @pytest.mark.anyio()
+    async def test_no_logging_basic_config_call(
+        self, tool_4_test_fixture: Tool4TestFixture, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that we don't accidentally call `logging.basicConfig()`.
+
+        See issue #45
+        """
+        root = logging.getLogger()
+        monkeypatch.setattr(root, "handlers", [])
+
+        client_for_conn_to_proxy_server = (
+            tool_4_test_fixture.client_for_conn_to_proxy_server
+        )
+        proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
+
+        resp = await client_for_conn_to_proxy_server.get(proxy_server_base_url)
+        assert resp.is_success
+
+        assert not root.handlers, "logging handler added"
 
 
 class TestForwardHttpProxy(AbstractTestProxy):

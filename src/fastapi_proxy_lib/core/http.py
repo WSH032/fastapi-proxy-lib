@@ -42,6 +42,8 @@ __all__ = (
     "ForwardHttpProxy",
 )
 
+logger = logging.getLogger(__name__)
+
 #################### Data Model ####################
 
 
@@ -273,7 +275,7 @@ class BaseHttpProxy(BaseProxyModel):
         )
 
         # DEBUG: 用于调试的记录
-        logging.debug(
+        logger.debug(
             "HTTP: client:%s ; url:%s ; head:%s",
             request.client,
             proxy_request.url,
@@ -435,7 +437,7 @@ class ReverseHttpProxy(BaseHttpProxy):
                     "Oops! Something wrong! Please contact the server maintainer!"
                 ),
                 status_code=starlette_status.HTTP_502_BAD_GATEWAY,
-                logger=logging.exception,
+                logger=logger.exception,
                 _msg=msg,
                 _exc_info=e,
             )
@@ -551,7 +553,7 @@ class ForwardHttpProxy(BaseHttpProxy):
             return return_err_msg_response(
                 e,
                 status_code=starlette_status.HTTP_400_BAD_REQUEST,
-                logger=logging.critical,
+                logger=logger.critical,
             )
 
         # 进行请求过滤
@@ -576,7 +578,7 @@ class ForwardHttpProxy(BaseHttpProxy):
             return return_err_msg_response(
                 e,
                 status_code=starlette_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                logger=logging.exception,
+                logger=logger.exception,
                 _exc_info=e,
             )
         # 请注意，我们不返回其他错误给客户端，因为这可能涉及到服务器内部的信息泄露
