@@ -11,7 +11,7 @@ import httpx_ws
 import pytest
 import uvicorn
 from fastapi_proxy_lib.fastapi.app import reverse_ws_app as get_reverse_ws_app
-from httpx_ws import aconnect_ws
+from httpx_ws import AsyncWebSocketSession, aconnect_ws
 from starlette import websockets as starlette_websockets_module
 from typing_extensions import override
 
@@ -33,7 +33,7 @@ DEFAULT_CONTX_EXIT_TIMEOUT = 5
 # # https://github.com/encode/uvicorn/discussions/2105
 WS_BACKENDS_NEED_BE_TESTED = ("websockets",)
 
-# https://www.python-httpx.org/advanced/#http-proxying
+# https://www.python-httpx.org/advanced/transports/#no-proxy-support
 NO_PROXIES: Dict[Any, Any] = {"all://": None}
 
 
@@ -81,18 +81,20 @@ def _subprocess_run_httpx_ws(
     kwargs_async_client = kwargs_async_client or {}
     kwargs_aconnect_ws = kwargs_aconnect_ws or {}
 
-    kwargs_async_client.pop("proxies", None)
+    kwargs_async_client.pop("mounts", None)
     kwargs_aconnect_ws.pop("client", None)
 
     async def run():
         _exit_stack = AsyncExitStack()
-        _temp_client = httpx.AsyncClient(proxies=NO_PROXIES, **kwargs_async_client)
-        _ = await _exit_stack.enter_async_context(
-            aconnect_ws(
+        _temp_client = httpx.AsyncClient(mounts=NO_PROXIES, **kwargs_async_client)
+        # it's `httpx-ws` typing issue, so ignore it
+        _ws_session: AsyncWebSocketSession = (
+            aconnect_ws(  # pyright: ignore[reportAssignmentType]
                 client=_temp_client,
                 **kwargs_aconnect_ws,
             )
         )
+        _ = await _exit_stack.enter_async_context(_ws_session)
         queue.put("done")
         queue.close()
         while True:  # run forever
@@ -125,7 +127,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         target_server_base_url = str(target_ws_server.contx_socket_url)
 
-        client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
+        client_for_conn_to_target_server = httpx.AsyncClient(mounts=NO_PROXIES)
 
         reverse_ws_app = get_reverse_ws_app(
             client=client_for_conn_to_target_server, base_url=target_server_base_url
@@ -140,7 +142,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         proxy_server_base_url = str(proxy_ws_server.contx_socket_url)
 
-        client_for_conn_to_proxy_server = httpx.AsyncClient(proxies=NO_PROXIES)
+        client_for_conn_to_proxy_server = httpx.AsyncClient(mounts=NO_PROXIES)
 
         return Tool4TestFixture(
             client_for_conn_to_target_server=client_for_conn_to_target_server,
@@ -210,7 +212,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         aconnect_ws_subprocess_queue: "Queue[str]" = Queue()
 
-        kwargs_async_client = {"proxies": NO_PROXIES}
+        kwargs_async_client = {"mounts": NO_PROXIES}
         kwargs_aconnect_ws = {"url": proxy_server_base_url + "do_nothing"}
         kwargs = {
             "kwargs_async_client": kwargs_async_client,
@@ -270,7 +272,7 @@ class TestReverseWsProxy(AbstractTestProxy):
             await asyncio.sleep(0.1)
         target_server_base_url = subprocess_queue.get()
 
-        client_for_conn_to_target_server = httpx.AsyncClient(proxies=NO_PROXIES)
+        client_for_conn_to_target_server = httpx.AsyncClient(mounts=NO_PROXIES)
 
         reverse_ws_app = get_reverse_ws_app(
             client=client_for_conn_to_target_server, base_url=target_server_base_url
@@ -285,31 +287,23 @@ class TestReverseWsProxy(AbstractTestProxy):
 
             async with aconnect_ws(
                 proxy_server_base_url + "do_nothing",
-                httpx.AsyncClient(proxies=NO_PROXIES),
-            ) as ws0, aconnect_ws(
-                proxy_server_base_url + "do_nothing",
-                httpx.AsyncClient(proxies=NO_PROXIES),
-            ) as ws1:
+                httpx.AsyncClient(mounts=NO_PROXIES),
+            ) as ws:
+                loop = asyncio.get_running_loop()
+
                 # force shutdown target server
                 target_ws_server_subprocess.terminate()
                 target_ws_server_subprocess.kill()
+
+                start = loop.time()
+
+                with pytest.raises(httpx_ws.WebSocketDisconnect) as exce:
+                    await ws.receive()
+                assert exce.value.code == 1011
+
+                end = loop.time()
+                # we require the proxy server to send 1011 in 60s
+                assert end - start < 60
+
                 # https://pytest-cov.readthedocs.io/en/latest/subprocess-support.html#if-you-use-multiprocessing-process
                 target_ws_server_subprocess.join()  # dont forget this, pytest-cov requires this
-
-                with pytest.raises(httpx_ws.WebSocketDisconnect) as exce:
-                    await ws0.receive()
-                assert exce.value.code == 1011
-
-                loop = asyncio.get_running_loop()
-
-                seconde_ws_recv_start = loop.time()
-                with pytest.raises(httpx_ws.WebSocketDisconnect) as exce:
-                    await ws1.receive()
-                assert exce.value.code == 1011
-                seconde_ws_recv_end = loop.time()
-
-                # HACK: 由于收到关闭代码需要40s，目前无法确定是什么原因，
-                # 所以目前会同时测试两个客户端的连接，
-                # 只要第二个客户端不是在之前40s基础上又重复40s，就暂时没问题，
-                # 因为这模拟了多个客户端进行连接的情况。
-                assert (seconde_ws_recv_end - seconde_ws_recv_start) < 2
