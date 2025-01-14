@@ -4,7 +4,7 @@
 import asyncio
 from contextlib import AsyncExitStack
 from multiprocessing import Process, Queue
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal, Optional
 
 import httpx
 import httpx_ws
@@ -34,7 +34,7 @@ DEFAULT_CONTX_EXIT_TIMEOUT = 5
 WS_BACKENDS_NEED_BE_TESTED = ("websockets",)
 
 # https://www.python-httpx.org/advanced/transports/#no-proxy-support
-NO_PROXIES: Dict[Any, Any] = {"all://": None}
+NO_PROXIES: dict[Any, Any] = {"all://": None}
 
 
 def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
@@ -68,8 +68,8 @@ def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
 
 def _subprocess_run_httpx_ws(
     queue: "Queue[str]",
-    kwargs_async_client: Optional[Dict[str, Any]] = None,
-    kwargs_aconnect_ws: Optional[Dict[str, Any]] = None,
+    kwargs_async_client: Optional[dict[str, Any]] = None,
+    kwargs_aconnect_ws: Optional[dict[str, Any]] = None,
 ):
     """Run aconnect_ws in subprocess.
 

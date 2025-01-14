@@ -13,8 +13,6 @@ import sys
 from pathlib import Path
 from typing import (
     Any,
-    Dict,
-    List,
     Union,
 )
 
@@ -30,13 +28,13 @@ yaml = YAML(typ="safe")
 pre_commit_config_yaml_path = Path(".pre-commit-config.yaml")
 pyproject_toml_path = Path("pyproject.toml")
 
-RepoType = Dict[str, Any]
-HookType = Dict[str, Any]
+RepoType = dict[str, Any]
+HookType = dict[str, Any]
 
 if __name__ == "__main__":
     # NOTE: 这三个键名应该对应
     # pyproject_toml["tool"]["hatch"]["envs"]["default"]["dependencies"] 里的值
-    vers_in_pre_commit: Dict[str, Union[None, str]] = {
+    vers_in_pre_commit: dict[str, Union[None, str]] = {
         "ruff": None,
         "black": None,
         "codespell": None,
@@ -44,10 +42,10 @@ if __name__ == "__main__":
 
     # 找出pre-commit-config.yaml中的版本
     pre_commit_yaml = yaml.load(pre_commit_config_yaml_path)
-    repos_lst: List[RepoType] = pre_commit_yaml["repos"]
+    repos_lst: list[RepoType] = pre_commit_yaml["repos"]
 
     for repo in repos_lst:
-        hooks_lst: List[HookType] = repo["hooks"]
+        hooks_lst: list[HookType] = repo["hooks"]
         hook = hooks_lst[0]  # 特殊标记的只有一个hook
         hook_alias = hook.get("alias")  # 只有特殊标记的才有alias
         if hook_alias is None:
@@ -56,7 +54,7 @@ if __name__ == "__main__":
             vers_in_pre_commit[hook_alias] = repo["rev"]
 
     # 检查是否正确
-    new_vers: Dict[str, Version] = {}
+    new_vers: dict[str, Version] = {}
     for name, ver in vers_in_pre_commit.items():
         if not isinstance(ver, str):
             sys.exit(f"Error: version of `{name}` not found in pre-commit-config.yaml")
