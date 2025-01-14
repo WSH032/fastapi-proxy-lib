@@ -2,7 +2,8 @@
 # pyright: reportUnusedFunction=false
 
 import io
-from typing import Literal, Mapping, Union
+from collections.abc import Mapping
+from typing import Literal, Union
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import StreamingResponse

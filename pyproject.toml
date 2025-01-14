@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 # https://hatch.pypa.io/latest/config/metadata/
 [project]
 name = "fastapi-proxy-lib"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
@@ -29,11 +29,11 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
     "Topic :: Internet :: WWW/HTTP :: Session",
@@ -50,7 +50,7 @@ dynamic = ["version"]
 
 dependencies = [
     "httpx",
-    "httpx-ws >= 0.4.2",
+    "httpx-ws >= 0.7.1",
     "starlette",
     "typing_extensions >=4.5.0",
 ]
@@ -123,7 +123,7 @@ path = ".venv-docs"
 detached = true
 dependencies = [
     "mkdocs-material == 9.*",
-    "mkdocstrings[python] == 0.24.*",
+    "mkdocstrings[python] == 0.27.*",
     "mkdocs-gen-files == 0.5.*",
     "mkdocs-literate-nav == 0.6.*",
     "mkdocs-section-index == 0.3.*",
@@ -202,7 +202,7 @@ convention = "google"
 # https://microsoft.github.io/pyright/#/configuration
 [tool.pyright]
 typeCheckingMode = "strict"
-pythonVersion = "3.8"
+pythonVersion = "3.9"
 reportUnusedImport = "warning"
 reportUnusedFunction = "warning"
 reportUnusedExpression = "warning"

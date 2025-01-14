@@ -5,15 +5,13 @@ The low-level API for [fastapi_proxy_lib.fastapi.app][].
 
 import asyncio
 import warnings
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import (
     Any,
-    AsyncContextManager,
-    AsyncIterator,
     Callable,
     Literal,
     Optional,
-    Set,
     TypeVar,
     Union,
 )
@@ -170,13 +168,13 @@ class RouterHelper:
 
     def __init__(self) -> None:
         """Initialize RouterHelper."""
-        self._registered_proxy: Set[Union[_HttpProxyTypes, _WebSocketProxyTypes]] = (
+        self._registered_proxy: set[Union[_HttpProxyTypes, _WebSocketProxyTypes]] = (
             set()
         )
-        self._registered_router_id: Set[int] = set()
+        self._registered_router_id: set[int] = set()
 
     @property
-    def registered_proxy(self) -> Set[Union[_HttpProxyTypes, _WebSocketProxyTypes]]:
+    def registered_proxy(self) -> set[Union[_HttpProxyTypes, _WebSocketProxyTypes]]:
         """The proxy that has been registered."""
         return self._registered_proxy
 
@@ -253,7 +251,7 @@ class RouterHelper:
         self._registered_proxy.add(proxy)
         return router
 
-    def get_lifespan(self) -> Callable[..., AsyncContextManager[None]]:
+    def get_lifespan(self) -> Callable[..., AbstractAsyncContextManager[None]]:
         """The lifespan event for closing registered proxy.
 
         Returns:

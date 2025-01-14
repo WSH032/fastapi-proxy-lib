@@ -4,6 +4,7 @@
 import httpx
 import pytest
 from fastapi_proxy_lib.core.tool import default_proxy_filter
+from httpx import ASGITransport
 from typing_extensions import override
 
 from .conftest import AppFactoryFixture, LifeAppDataclass4Test
@@ -32,7 +33,8 @@ class TestReverseHttpProxy(AbstractTestProxy):
     ) -> Tool4TestFixture:
         """目标服务器请参考`tests.app.echo_http_app.get_app`."""
         client_for_conn_to_target_server = httpx.AsyncClient(
-            app=echo_http_test_model.app, base_url=DEFAULT_TARGET_SERVER_BASE_URL
+            transport=ASGITransport(echo_http_test_model.app),
+            base_url=DEFAULT_TARGET_SERVER_BASE_URL,
         )
 
         reverse_http_app = await reverse_http_app_fct(
@@ -41,7 +43,8 @@ class TestReverseHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=reverse_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=ASGITransport(reverse_http_app),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         get_request = echo_http_test_model.get_request
@@ -198,7 +201,8 @@ class TestReverseHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=reverse_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=ASGITransport(reverse_http_app),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         r = await client_for_conn_to_proxy_server.get(DEFAULT_PROXY_SERVER_BASE_URL)
@@ -252,7 +256,8 @@ class TestForwardHttpProxy(AbstractTestProxy):
     ) -> Tool4TestFixture:
         """目标服务器请参考`tests.app.echo_http_app.get_app`."""
         client_for_conn_to_target_server = httpx.AsyncClient(
-            app=echo_http_test_model.app, base_url=DEFAULT_TARGET_SERVER_BASE_URL
+            transport=ASGITransport(echo_http_test_model.app),
+            base_url=DEFAULT_TARGET_SERVER_BASE_URL,
         )
 
         forward_http_app = await forward_http_app_fct(
@@ -260,7 +265,8 @@ class TestForwardHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=forward_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=ASGITransport(forward_http_app),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         get_request = echo_http_test_model.get_request
@@ -310,7 +316,8 @@ class TestForwardHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=forward_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=ASGITransport(forward_http_app),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         # 错误的无法发出请求的URL
@@ -356,7 +363,8 @@ class TestForwardHttpProxy(AbstractTestProxy):
         )
 
         client_for_conn_to_proxy_server = httpx.AsyncClient(
-            app=forward_http_app, base_url=DEFAULT_PROXY_SERVER_BASE_URL
+            transport=ASGITransport(forward_http_app),
+            base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
         r = await client_for_conn_to_proxy_server.get(

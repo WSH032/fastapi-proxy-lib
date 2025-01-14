@@ -3,8 +3,8 @@
 
 def test_forward_http_proxy() -> None:
     """测试 ForwardHttpProxy 中的例子."""
+    from collections.abc import AsyncIterator
     from contextlib import asynccontextmanager
-    from typing import AsyncIterator
 
     from fastapi import FastAPI
     from fastapi_proxy_lib.core.http import ForwardHttpProxy
@@ -33,8 +33,8 @@ def test_forward_http_proxy() -> None:
 
 def test_reverse_http_proxy() -> None:
     """测试 ReverseHttpProxy 中的例子."""
+    from collections.abc import AsyncIterator
     from contextlib import asynccontextmanager
-    from typing import AsyncIterator
 
     from fastapi import FastAPI
     from fastapi_proxy_lib.core.http import ReverseHttpProxy
@@ -71,8 +71,8 @@ def test_reverse_http_proxy() -> None:
 
 def test_reverse_ws_proxy() -> None:
     """测试 ReverseWebSocketProxy 中的例子."""
+    from collections.abc import AsyncIterator
     from contextlib import asynccontextmanager
-    from typing import AsyncIterator
 
     from fastapi import FastAPI
     from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy

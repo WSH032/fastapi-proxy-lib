@@ -4,7 +4,6 @@ import logging
 from textwrap import dedent
 from typing import (
     Any,
-    List,
     NamedTuple,
     NoReturn,
     Optional,
@@ -185,7 +184,7 @@ def _change_server_header(
     Returns:
         The **oringinal headers**, but **had been changed**.
     """
-    server_connection_header: List[str] = [
+    server_connection_header: list[str] = [
         v.strip() for v in headers.get("connection", "").lower().split(",")
     ]
 
