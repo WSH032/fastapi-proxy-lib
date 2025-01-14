@@ -368,7 +368,12 @@ def check_http_version(
 def default_proxy_filter(url: httpx.URL) -> Union[None, str]:
     """Filter by host.
 
-    If the host of url is ip address, which is not global ip address, then will reject it.
+    Reject the following hosts:
+
+    - if the host is ip address, and is not global ip address. e.g:
+        - `http://127.0.0.1`
+        - `http://192.168.0.1`
+    - if the host contains "localhost".
 
     Warning:
         It will consumption time: 3.22~4.7 µs ± 42.6 ns.
@@ -381,8 +386,12 @@ def default_proxy_filter(url: httpx.URL) -> Union[None, str]:
         str: should rejetc the proxy request.
             The `str` is the reason of reject.
     """
+    host = url.host
+    if "localhost" in host:
+        return "Deny proxy for localhost."
+
     try:
-        ip_address = ipaddress.ip_address(url.host)
+        ip_address = ipaddress.ip_address(host)
     except ValueError:
         return None
 
@@ -401,7 +410,7 @@ def warn_for_none_filter(proxy_filter: None) -> ProxyFilterProto: ...
 
 
 def warn_for_none_filter(
-    proxy_filter: Union[ProxyFilterProto, None]
+    proxy_filter: Union[ProxyFilterProto, None],
 ) -> ProxyFilterProto:
     """Check whether the argument `proxy_filter` is None.
 
