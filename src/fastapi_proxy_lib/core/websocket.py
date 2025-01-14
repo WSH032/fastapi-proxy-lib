@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     # 这些是私有模块，无法确定以后版本是否会改变，为了保证运行时不会出错，我们使用TYPE_CHECKING
     from httpx._types import HeaderTypes, QueryParamTypes
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 #################### Data Model ####################
 
@@ -198,7 +198,7 @@ async def _httpx_ws_receive_bytes_or_str(
             return bytes(event.data)
     else:  # pragma: no cover # 无法测试这个分支，因为无法发送这种消息，正常来说也不会被执行，所以我们这里记录critical
         msg = f"Invalid message type received: {type(event)}"
-        logger.critical(msg)
+        _logger.critical(msg)
         raise httpx_ws.WebSocketInvalidTypeReceived(event)
 
 
@@ -367,12 +367,12 @@ An error occurred in the websocket connection for {client_host}:{client_port}.
 client_error: {client_error}
 server_error: {server_error}\
 """
-            logger.warning(msg)
+            _logger.warning(msg)
 
     except (
         Exception
     ) as e:  # pragma: no cover # 这个分支是一个保险分支，通常无法执行，所以只进行记录
-        logger.error(
+        _logger.error(
             f"{e} when close ws connection. client: {client_to_server_task}, server:{server_to_client_task}"
         )
         raise
@@ -391,7 +391,7 @@ server_error: {server_error}\
         except Exception as e:  # pragma: no cover
             # 这个分支是一个保险分支，通常无法执行，所以只进行记录
             # 不会触发的原因是，负责服务端 ws 连接的 httpx_ws 支持重复调用close而不引发错误
-            logger.debug("Unexpected error for debug", exc_info=e)
+            _logger.debug("Unexpected error for debug", exc_info=e)
 
 
 #################### # ####################
@@ -504,7 +504,7 @@ class BaseWebSocketProxy(BaseProxyModel):
             return check_result
 
         # DEBUG: 用于调试的记录
-        logger.debug(
+        _logger.debug(
             "WS: client:%s ; url:%s ; params:%s ; headers:%s",
             websocket.client,
             target_url,
@@ -622,14 +622,14 @@ class BaseWebSocketProxy(BaseProxyModel):
                     try:
                         await asyncio.wait_for(pending_task, timeout=1)
                     except asyncio.TimeoutError:
-                        logger.debug(f"{pending} TimeoutError, it's normal.")
+                        _logger.debug(f"{pending} TimeoutError, it's normal.")
                     except Exception as e:
                         # 取消期间可能另一个ws会发生异常，这个是正常情况，且会被 asyncio.wait_for 传播
-                        logger.debug(
+                        _logger.debug(
                             f"{pending} raise error when being canceled, it's normal. error: {e}"
                         )
             except Exception as e:  # pragma: no cover # 这个是保险分支，通常无法执行
-                logger.warning(
+                _logger.warning(
                     f"Something wrong, please contact the developer. error: {e}"
                 )
                 raise
