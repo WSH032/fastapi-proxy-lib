@@ -622,12 +622,12 @@ class BaseWebSocketProxy(BaseProxyModel):
                         await asyncio.wait_for(pending_task, timeout=1)
                     except asyncio.TimeoutError:
                         _logger.debug(f"{pending} TimeoutError, it's normal.")
-                    except Exception as e:
+                    except Exception as e:  # pragma: no cover # usually unreachable
                         # 取消期间可能另一个ws会发生异常，这个是正常情况，且会被 asyncio.wait_for 传播
                         _logger.debug(
                             f"{pending} raise error when being canceled, it's normal. error: {e}"
                         )
-            except Exception as e:  # pragma: no cover # 这个是保险分支，通常无法执行
+            except Exception as e:  # pragma: no cover # usually unreachable
                 _logger.warning(
                     f"Something wrong, please contact the developer. error: {e}"
                 )
