@@ -3,12 +3,11 @@
 import ipaddress
 import logging
 import warnings
+from collections.abc import Iterable, Mapping
 from functools import lru_cache
 from textwrap import dedent
 from typing import (
     Any,
-    Iterable,
-    Mapping,
     Optional,
     Protocol,
     TypedDict,

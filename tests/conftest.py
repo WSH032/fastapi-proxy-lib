@@ -8,12 +8,11 @@
 # https://anyio.readthedocs.io/en/stable/testing.html
 
 import typing
+from collections.abc import AsyncIterator, Coroutine
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from typing import (
-    AsyncIterator,
     Callable,
-    Coroutine,
     Literal,
     Protocol,
     Union,
