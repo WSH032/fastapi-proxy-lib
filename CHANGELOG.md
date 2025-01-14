@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#30](https://github.com/WSH032/fastapi-proxy-lib/pull/30) - fix(internal): use `websocket` in favor of `websocket_route`. Thanks [@WSH032](https://github.com/WSH032)!
 
+### Fixed
+
+- [#46](https://github.com/WSH032/fastapi-proxy-lib/pull/46) - fix: don't use module-level logging methods. Thanks [@dvarrazzo](https://github.com/dvarrazzo)
+
 ### Internal
 
 - [#47](https://github.com/WSH032/fastapi-proxy-lib/pull/47) - test: do not use deprecated and removed APIs of httpx. Thanks [@WSH032](https://github.com/WSH032)!
