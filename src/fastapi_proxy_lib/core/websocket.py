@@ -6,7 +6,6 @@ from contextlib import AsyncExitStack
 from typing import (
     TYPE_CHECKING,
     Any,
-    List,
     Literal,
     NamedTuple,
     NoReturn,
@@ -80,7 +79,7 @@ SUPPORTED_WS_HTTP_VERSIONS = ("1.1",)
 _change_client_header = change_necessary_client_header_for_httpx
 
 
-def _get_client_request_subprotocols(ws_scope: Scope) -> Union[List[str], None]:
+def _get_client_request_subprotocols(ws_scope: Scope) -> Union[list[str], None]:
     """Get client request subprotocols.
 
     Args:
@@ -91,7 +90,7 @@ def _get_client_request_subprotocols(ws_scope: Scope) -> Union[List[str], None]:
         Else return `None`.
     """
     # https://asgi.readthedocs.io/en/latest/specs/www.html#websocket-connection-scope
-    subprotocols: List[str] = ws_scope.get("subprotocols", [])
+    subprotocols: list[str] = ws_scope.get("subprotocols", [])
     if not subprotocols:  # 即为 []
         return None
     return subprotocols
@@ -484,7 +483,7 @@ class BaseWebSocketProxy(BaseProxyModel):
         keepalive_ping_interval_seconds = self.keepalive_ping_interval_seconds
         keepalive_ping_timeout_seconds = self.keepalive_ping_timeout_seconds
 
-        client_request_subprotocols: Union[List[str], None] = (
+        client_request_subprotocols: Union[list[str], None] = (
             _get_client_request_subprotocols(websocket.scope)
         )
 

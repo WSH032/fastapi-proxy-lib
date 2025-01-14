@@ -3,7 +3,7 @@
 import asyncio
 import socket
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Type, TypedDict, TypeVar, Union
+from typing import Any, Callable, Optional, TypedDict, TypeVar, Union
 
 import httpx
 import uvicorn
@@ -12,7 +12,7 @@ from starlette.requests import Request
 from starlette.websockets import WebSocket
 from typing_extensions import Self, override
 
-_Decoratable_T = TypeVar("_Decoratable_T", bound=Union[Callable[..., Any], Type[Any]])
+_Decoratable_T = TypeVar("_Decoratable_T", bound=Union[Callable[..., Any], type[Any]])
 
 ServerRecvRequestsTypes = Union[Request, WebSocket]
 
@@ -100,7 +100,7 @@ class UvicornServer(uvicorn.Server):
         self.contx_exit_timeout = contx_exit_timeout
 
     @override
-    async def startup(self, sockets: Optional[List[socket.socket]] = None) -> None:
+    async def startup(self, sockets: Optional[list[socket.socket]] = None) -> None:
         """The same as `uvicorn.Server.startup`."""
         super_return = await super().startup(sockets=sockets)
         self.contx_server_started_event.set()
