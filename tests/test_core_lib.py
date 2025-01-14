@@ -13,6 +13,7 @@ from fastapi_proxy_lib.core._tool import (
 from fastapi_proxy_lib.core.http import ReverseHttpProxy
 from fastapi_proxy_lib.fastapi.app import forward_http_app, reverse_http_app
 from fastapi_proxy_lib.fastapi.router import RouterHelper
+from httpx import ASGITransport
 from starlette.responses import JSONResponse
 
 from .tool import DEFAULT_URL
@@ -70,7 +71,9 @@ async def test_func_return_err_msg_response() -> None:
     #     }
     # }
 
-    client = httpx.AsyncClient(app=app, base_url="http://www.example.com")
+    client = httpx.AsyncClient(
+        transport=ASGITransport(app), base_url="http://www.example.com"
+    )
     resp = await client.get("http://www.example.com/exception")
     assert resp.status_code == 0
     assert resp.json()["detail"] == test_err_msg

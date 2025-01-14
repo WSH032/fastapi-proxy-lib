@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 - `[YANKED]` for deprecated releases.
+- `Internal` for internal changes. Only for maintainers.
 
 <!-- Refer to: https://github.com/olivierlacan/keep-a-changelog/blob/main/CHANGELOG.md -->
 <!-- Refer to: https://github.com/gradio-app/gradio/blob/main/CHANGELOG.md -->
@@ -25,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - [#30](https://github.com/WSH032/fastapi-proxy-lib/pull/30) - fix(internal): use `websocket` in favor of `websocket_route`. Thanks [@WSH032](https://github.com/WSH032)!
+
+### Internal
+
+- [#47](https://github.com/WSH032/fastapi-proxy-lib/pull/47) - test: do not use deprecated and removed APIs of httpx. Thanks [@WSH032](https://github.com/WSH032)!
 
 ## [0.1.0] - 2023-12-01
 
