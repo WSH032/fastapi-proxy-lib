@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-01-15
+
 ### Added
 
 - [#37](https://github.com/WSH032/fastapi-proxy-lib/pull/37) - docs: add example of `Modify (redefine) response only to particular endpoint`. Thanks [@pavelsr](https://github.com/pavelsr)!
@@ -30,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - [#30](https://github.com/WSH032/fastapi-proxy-lib/pull/30) - fix(internal): use `websocket` in favor of `websocket_route`. Thanks [@WSH032](https://github.com/WSH032)!
+
+### Removed
+
+- [#49](https://github.com/WSH032/fastapi-proxy-lib/pull/49) - Drop support for `Python 3.8`.
 
 ### Fixed
 
@@ -39,10 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - [#50](https://github.com/WSH032/fastapi-proxy-lib/pull/50) - fix(security): add `localhost` rule to `default_proxy_filter`. Thanks [@WSH032](https://github.com/WSH032)!
-
-### Removed
-
-- [#49](https://github.com/WSH032/fastapi-proxy-lib/pull/49) - Drop support for `Python 3.8`.
 
 ### Internal
 
@@ -64,5 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     **This version has security vulnerabilities, please stop using it.**
 
 [unreleased]: https://github.com/WSH032/fastapi-proxy-lib/tree/HEAD
+[0.2.0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.2.0
 [0.1.0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.1.0
 [0.0.1b0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.0.1b0
