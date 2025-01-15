@@ -43,6 +43,8 @@ __all__ = (
     "_RejectedProxyRequestError",
 )
 
+_logger = logging.getLogger(__name__)
+
 #################### Constant ####################
 
 
@@ -361,7 +363,7 @@ def check_http_version(
         return return_err_msg_response(
             error,
             status_code=status.HTTP_505_HTTP_VERSION_NOT_SUPPORTED,
-            logger=logging.info,
+            logger=_logger.info,
         )
 
 

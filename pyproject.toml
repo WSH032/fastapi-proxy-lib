@@ -191,6 +191,9 @@ ignore = [
     # "SIM108",  # if-else-block-instead-of-if-exp
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"docs_src/**/*.py" = ["D"]
+
 # https://docs.astral.sh/ruff/settings/#pydocstyle
 [tool.ruff.lint.pydocstyle]
 convention = "google"

@@ -130,6 +130,7 @@ watch:
   - README.md
   - CONTRIBUTING.md
   - CHANGELOG.md
+  - docs_src/
 
 validation:
   omitted_files: warn

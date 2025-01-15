@@ -30,27 +30,7 @@ See <https://www.python-httpx.org/advanced/#customizing-authentication>
 You can refer following example to implement a simple authentication:
 
 ```python
-import httpx
-from fastapi_proxy_lib.fastapi.app import reverse_http_app
-
-
-class MyCustomAuth(httpx.Auth):
-    # ref: https://www.python-httpx.org/advanced/#customizing-authentication
-
-    def __init__(self, token: str):
-        self.token = token
-
-    def auth_flow(self, request: httpx.Request):
-        # Send the request, with a custom `X-Authentication` header.
-        request.headers["X-Authentication"] = self.token
-        yield request
-
-
-app = reverse_http_app(
-    client=httpx.AsyncClient(auth=MyCustomAuth("bearer_token")),
-    base_url="http://www.httpbin.org/",
-)
-
+--8<-- "docs_src/advanced/modify-request.py"
 ```
 
 visit `/headers` to see the result which contains `"X-Authentication": "bearer_token"` header.
@@ -64,57 +44,24 @@ See [issue#15](https://github.com/WSH032/fastapi-proxy-lib/issues/15)
 You can refer following example to modify the response:
 
 ```python
-from contextlib import asynccontextmanager
-from typing import AsyncIterable, AsyncIterator, Union
-
-from fastapi import FastAPI
-from fastapi_proxy_lib.core.http import ReverseHttpProxy
-from starlette.requests import Request
-from starlette.responses import StreamingResponse
-
-AsyncContentStream = AsyncIterable[Union[str, bytes]]
-
-
-proxy = ReverseHttpProxy(base_url="http://www.example.com/")
-
-
-@asynccontextmanager
-async def close_proxy_event(_: FastAPI) -> AsyncIterator[None]:
-    """Close proxy."""
-    yield
-    await proxy.aclose()
-
-
-app = FastAPI(lifespan=close_proxy_event)
-
-
-async def new_content(origin_content: AsyncContentStream) -> AsyncContentStream:
-    """Fake content processing."""
-    async for chunk in origin_content:
-        # do some processing with chunk, e.g transcoding,
-        # here we just print and return it as an example.
-        print(chunk)
-        yield chunk
-
-
-@app.get("/{path:path}")
-async def _(request: Request, path: str = ""):
-    proxy_response = await proxy.proxy(request=request, path=path)
-
-    if isinstance(proxy_response, StreamingResponse):
-        # get the origin content stream
-        old_content = proxy_response.body_iterator
-
-        new_resp = StreamingResponse(
-            content=new_content(old_content),
-            status_code=proxy_response.status_code,
-            headers=proxy_response.headers,
-            media_type=proxy_response.media_type,
-        )
-        return new_resp
-
-    return proxy_response
-
+--8<-- "docs_src/advanced/modify-response.py"
 ```
 
 visit `/`, you will notice that the response body is printed to the console.
+
+## Modify (redefine) response only to particular endpoint
+
+```python
+--8<-- "docs_src/advanced/modify-response-particular.py"
+```
+
+In this example all requests except `GET /ip` will be passed to `httpbin.org`:
+
+```bash
+# we assume your proxy server is running on `http://127.0.0.0:8000`
+
+# from `httpbin.org` which is proxied
+curl http://127.0.0.0:8000/user-agent   # { "user-agent": "curl/7.81.0" }
+# from your fastapi app
+curl http://127.0.0.0:8000/ip           # { "msg":"Method is redefined" }
+```
