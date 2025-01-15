@@ -90,10 +90,33 @@ async def test_func_return_err_msg_response() -> None:
 
 def test_func_default_proxy_filter() -> None:
     """Test `fastapi_proxy_lib.core._tool.default_proxy_filter()`."""
-    # 禁止访问私有IP
-    assert default_proxy_filter(httpx.URL("http://www.example.com")) is None
-    assert default_proxy_filter(httpx.URL("http://1.1.1.1")) is None
-    assert default_proxy_filter(httpx.URL("http://127.0.0.1")) is not None
+    # prevent access to private ip
+
+    def _check(url: str, should_pass: bool) -> None:
+        httpx_url = httpx.URL(url)
+        if should_pass:
+            assert default_proxy_filter(httpx_url) is None
+        else:
+            assert default_proxy_filter(httpx_url) is not None
+
+    def should_pass(url: str) -> None:
+        _check(url, True)
+
+    def should_not_pass(url: str) -> None:
+        _check(url, False)
+
+    # passed
+    should_pass("http://www.example.com")
+    should_pass("http://www.example.com/path")
+    should_pass("http://1.1.1.1")
+
+    # private ip
+    should_not_pass("http://127.0.0.1")
+    should_not_pass("http://[::1]")
+    should_not_pass("http://192.168.0.1")
+    should_not_pass("http://10.0.0.1")
+    should_not_pass("http://172.31.0.1")
+    should_not_pass("http://localhost")
 
 
 def test_non_filter_warning_for_forward_proxy() -> None:

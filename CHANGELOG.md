@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#46](https://github.com/WSH032/fastapi-proxy-lib/pull/46) - fix: don't use module-level logging methods. Thanks [@dvarrazzo](https://github.com/dvarrazzo)
 - [#49](https://github.com/WSH032/fastapi-proxy-lib/pull/49) - fix!: bump `httpx-ws >= 0.7.1` to fix frankie567/httpx-ws#29. Thanks [@WSH032](https://github.com/WSH032)!
 
+### Security
+
+- [#50](https://github.com/WSH032/fastapi-proxy-lib/pull/50) - fix(security): add `localhost` rule to `default_proxy_filter`. Thanks [@WSH032](https://github.com/WSH032)!
+
 ### Removed
 
 - [#49](https://github.com/WSH032/fastapi-proxy-lib/pull/49) - Drop support for `Python 3.8`.
