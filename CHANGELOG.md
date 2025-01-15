@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- [#37](https://github.com/WSH032/fastapi-proxy-lib/pull/37) - docs: add example of `Modify (redefine) response only to particular endpoint`. Thanks [@pavelsr](https://github.com/pavelsr)!
+
 ### Changed
 
 - [#30](https://github.com/WSH032/fastapi-proxy-lib/pull/30) - fix(internal): use `websocket` in favor of `websocket_route`. Thanks [@WSH032](https://github.com/WSH032)!
