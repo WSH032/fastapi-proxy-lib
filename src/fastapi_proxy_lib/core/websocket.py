@@ -490,10 +490,10 @@ class BaseWebSocketProxy(BaseProxyModel):
 
         # httpx.stream()
         # refer to: https://www.python-httpx.org/api/#helper-functions
-        client_request_headers: "HeaderTypes" = _change_client_header(
+        client_request_headers: HeaderTypes = _change_client_header(
             headers=websocket.headers, target_url=target_url
         )
-        client_request_params: "QueryParamTypes" = websocket.query_params
+        client_request_params: QueryParamTypes = websocket.query_params
 
         # TODO: 是否可以不检查http版本?
         check_result = check_http_version(websocket.scope, SUPPORTED_WS_HTTP_VERSIONS)

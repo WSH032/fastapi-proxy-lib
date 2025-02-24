@@ -2,9 +2,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi_proxy_lib.core.http import ReverseHttpProxy
 from starlette.requests import Request
 from starlette.responses import AsyncContentStream, StreamingResponse
+
+from fastapi_proxy_lib.core.http import ReverseHttpProxy
 
 proxy = ReverseHttpProxy(base_url="http://www.example.com/")
 

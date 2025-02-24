@@ -37,8 +37,8 @@ from ._tool import (
 
 __all__ = (
     "BaseHttpProxy",
-    "ReverseHttpProxy",
     "ForwardHttpProxy",
+    "ReverseHttpProxy",
 )
 
 _logger = logging.getLogger(__name__)
