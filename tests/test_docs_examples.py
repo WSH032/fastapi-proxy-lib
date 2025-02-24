@@ -7,10 +7,11 @@ def test_forward_http_proxy() -> None:
     from contextlib import asynccontextmanager
 
     from fastapi import FastAPI
-    from fastapi_proxy_lib.core.http import ForwardHttpProxy
-    from fastapi_proxy_lib.core.tool import default_proxy_filter
     from httpx import AsyncClient
     from starlette.requests import Request
+
+    from fastapi_proxy_lib.core.http import ForwardHttpProxy
+    from fastapi_proxy_lib.core.tool import default_proxy_filter
 
     proxy = ForwardHttpProxy(AsyncClient(), proxy_filter=default_proxy_filter)
 
@@ -37,9 +38,10 @@ def test_reverse_http_proxy() -> None:
     from contextlib import asynccontextmanager
 
     from fastapi import FastAPI
-    from fastapi_proxy_lib.core.http import ReverseHttpProxy
     from httpx import AsyncClient
     from starlette.requests import Request
+
+    from fastapi_proxy_lib.core.http import ReverseHttpProxy
 
     proxy = ReverseHttpProxy(AsyncClient(), base_url="http://www.example.com/")
 
@@ -75,9 +77,10 @@ def test_reverse_ws_proxy() -> None:
     from contextlib import asynccontextmanager
 
     from fastapi import FastAPI
-    from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
     from httpx import AsyncClient
     from starlette.websockets import WebSocket
+
+    from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
 
     proxy = ReverseWebSocketProxy(AsyncClient(), base_url="ws://echo.websocket.events/")
 
@@ -101,6 +104,7 @@ def test_reverse_ws_proxy() -> None:
 def test_router_helper() -> None:
     """测试 RouterHelper 中的例子."""
     from fastapi import APIRouter, FastAPI
+
     from fastapi_proxy_lib.core.http import ForwardHttpProxy, ReverseHttpProxy
     from fastapi_proxy_lib.core.tool import default_proxy_filter
     from fastapi_proxy_lib.core.websocket import ReverseWebSocketProxy
