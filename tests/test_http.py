@@ -5,9 +5,10 @@ import logging
 
 import httpx
 import pytest
-from fastapi_proxy_lib.core.tool import default_proxy_filter
 from httpx import ASGITransport
 from typing_extensions import override
+
+from fastapi_proxy_lib.core.tool import default_proxy_filter
 
 from .conftest import AppFactoryFixture, LifeAppDataclass4Test
 from .tool import (
@@ -27,7 +28,7 @@ class TestReverseHttpProxy(AbstractTestProxy):
     """For testing reverse http proxy."""
 
     @override
-    @pytest.fixture()
+    @pytest.fixture
     async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         echo_http_test_model: LifeAppDataclass4Test,
@@ -59,7 +60,7 @@ class TestReverseHttpProxy(AbstractTestProxy):
             proxy_server_base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_all_request_methods(
         self, tool_4_test_fixture: Tool4TestFixture
     ) -> None:
@@ -80,7 +81,7 @@ class TestReverseHttpProxy(AbstractTestProxy):
         )
         assert all(resp.is_success for resp in resp_lst)
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_if_the_header_is_properly_handled(
         self, tool_4_test_fixture: Tool4TestFixture
     ) -> None:
@@ -158,7 +159,7 @@ class TestReverseHttpProxy(AbstractTestProxy):
         )
         assert "close" in proxy_resp.headers["connection"]
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_if_the_multiple_query_params_forwarding_is_correct(
         self, tool_4_test_fixture: Tool4TestFixture
     ) -> None:
@@ -189,7 +190,7 @@ class TestReverseHttpProxy(AbstractTestProxy):
             query_params.multi_items()
         )
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_if_the_proxy_forwarding_is_correct(
         self, tool_4_test_fixture: Tool4TestFixture
     ) -> None:
@@ -220,7 +221,7 @@ class TestReverseHttpProxy(AbstractTestProxy):
         )
         assert r.content.decode("utf-8") == file_str
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_bad_url_request(
         self,
         reverse_http_app_fct: AppFactoryFixture,
@@ -242,7 +243,7 @@ class TestReverseHttpProxy(AbstractTestProxy):
         assert r.status_code == 502
         check_if_err_resp_is_from_px_serv(r)
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_cookie_leakage(
         self,
         tool_4_test_fixture: Tool4TestFixture,
@@ -277,7 +278,7 @@ class TestReverseHttpProxy(AbstractTestProxy):
         assert "foo" not in r.json()  # not leaked
         assert r.json()["a"] == "b"  # send cookies normally
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_no_logging_basic_config_call(
         self, tool_4_test_fixture: Tool4TestFixture, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -302,7 +303,7 @@ class TestReverseHttpProxy(AbstractTestProxy):
 class TestForwardHttpProxy(AbstractTestProxy):
     """For testing forward http proxy."""
 
-    @pytest.fixture()
+    @pytest.fixture
     async def tool_4_test_fixture(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         echo_http_test_model: LifeAppDataclass4Test,
@@ -333,7 +334,7 @@ class TestForwardHttpProxy(AbstractTestProxy):
             proxy_server_base_url=DEFAULT_PROXY_SERVER_BASE_URL,
         )
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_all_request_methods(
         self, tool_4_test_fixture: Tool4TestFixture
     ) -> None:
@@ -357,7 +358,7 @@ class TestForwardHttpProxy(AbstractTestProxy):
         )
         assert all(resp.is_success for resp in resp_lst)
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_bad_url_request(
         self,
         forward_http_app_fct: AppFactoryFixture,
@@ -393,7 +394,7 @@ class TestForwardHttpProxy(AbstractTestProxy):
         assert r.status_code == 403
         check_if_err_resp_is_from_px_serv(r)
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_500_proxy_server_internal_error(
         self,
         forward_http_app_fct: AppFactoryFixture,
@@ -427,7 +428,7 @@ class TestForwardHttpProxy(AbstractTestProxy):
         assert r.status_code == 500
         check_if_err_resp_is_from_px_serv(r)
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_denial_http2(
         self,
         forward_http_app_fct: AppFactoryFixture,

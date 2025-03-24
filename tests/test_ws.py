@@ -10,10 +10,11 @@ import httpx
 import httpx_ws
 import pytest
 import uvicorn
-from fastapi_proxy_lib.fastapi.app import reverse_ws_app as get_reverse_ws_app
 from httpx_ws import AsyncWebSocketSession, aconnect_ws
 from starlette import websockets as starlette_websockets_module
 from typing_extensions import override
+
+from fastapi_proxy_lib.fastapi.app import reverse_ws_app as get_reverse_ws_app
 
 from .app.echo_ws_app import get_app as get_ws_test_app
 from .app.tool import UvicornServer
@@ -152,7 +153,7 @@ class TestReverseWsProxy(AbstractTestProxy):
             proxy_server_base_url=proxy_server_base_url,
         )
 
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     async def test_ws_proxy(self, tool_4_test_fixture: Tool4TestFixture) -> None:
         """测试websocket代理."""
         proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
@@ -235,7 +236,7 @@ class TestReverseWsProxy(AbstractTestProxy):
         # NOTE: 这个测试不放在 `test_target_server_shutdown_abnormally` 来做
         # 是因为这里已经有现成的target server，放在这里测试可以节省启动服务器时间
 
-        aconnect_ws_subprocess_queue: "Queue[str]" = Queue()
+        aconnect_ws_subprocess_queue: Queue[str] = Queue()
 
         kwargs_async_client = {"mounts": NO_PROXIES}
         kwargs_aconnect_ws = {"url": proxy_server_base_url + "do_nothing"}
@@ -274,7 +275,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
     # FIXME: 调查为什么收到关闭代码需要40s
     @pytest.mark.timeout(60)
-    @pytest.mark.anyio()
+    @pytest.mark.anyio
     @pytest.mark.parametrize("ws_backend", WS_BACKENDS_NEED_BE_TESTED)
     async def test_target_server_shutdown_abnormally(
         self, ws_backend: Literal["websockets", "wsproto"]
@@ -283,7 +284,7 @@ class TestReverseWsProxy(AbstractTestProxy):
 
         需要在 60s 内向客户端发送 1011 关闭代码.
         """
-        subprocess_queue: "Queue[str]" = Queue()
+        subprocess_queue: Queue[str] = Queue()
 
         target_ws_server_subprocess = Process(
             target=_subprocess_run_echo_ws_uvicorn_server,

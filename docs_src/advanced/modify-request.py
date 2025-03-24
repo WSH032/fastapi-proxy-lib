@@ -2,8 +2,9 @@ from collections.abc import Generator
 from typing import Any
 
 import httpx
-from fastapi_proxy_lib.fastapi.app import reverse_http_app
 from httpx import Request
+
+from fastapi_proxy_lib.fastapi.app import reverse_http_app
 
 
 class MyCustomAuth(httpx.Auth):
