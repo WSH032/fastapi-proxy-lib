@@ -63,7 +63,7 @@ def get_app() -> AppDataclass4Test:  # noqa: C901
     @app.get("/get/echo_headers_and_params")
     async def echo_headers_and_params(
         request: Request,
-    ) -> Mapping[str, Union[str, Mapping[str, str]]]:
+    ) -> Mapping[str, Union[str, Mapping[str, str], list[tuple[str, str]]]]:
         """Http get method endpoint for echo headers, path_params, query_params.
 
         Returns:
@@ -71,7 +71,7 @@ def get_app() -> AppDataclass4Test:  # noqa: C901
             {
                 **request.headers,
                 "path_params": request.path_params,
-                "query_params": request.query_params,
+                "query_params": request.query_params.multi_items(),
             }
             ```
         """
@@ -80,7 +80,7 @@ def get_app() -> AppDataclass4Test:  # noqa: C901
         msg = {
             **request.headers,
             "path_params": request.path_params,
-            "query_params": request.query_params,
+            "query_params": request.query_params.multi_items(),
         }
         return msg
 

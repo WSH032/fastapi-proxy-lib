@@ -175,6 +175,19 @@ class TestReverseWsProxy(AbstractTestProxy):
             await ws.send_bytes(b"foo")
             assert await ws.receive_bytes() == b"foo"
 
+        query_params: list[tuple[str, str]] = [
+            ("key1", "value1"),
+            ("key2", "value2"),
+            ("key2", "value3"),
+        ]
+        async with aconnect_ws(
+            proxy_server_base_url + "echo_query_params",
+            client_for_conn_to_proxy_server,
+            params=tuple(query_params),
+        ) as ws:
+            data = await ws.receive_json()
+            assert [tuple(param) for param in data["query_params"]] == query_params
+
         ########## 测试子协议 ##########
 
         async with aconnect_ws(

@@ -169,11 +169,18 @@ class TestReverseHttpProxy(AbstractTestProxy):
         proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
 
         # 测试目标服务器响应体转发正常
+        query_params: list[tuple[str, str]] = [
+            ("key1", "value1"),
+            ("key2", "value2"),
+            ("key2", "value3"),
+        ]
         r = await client_for_conn_to_proxy_server.get(
             proxy_server_base_url + "get/echo_headers_and_params",
             headers={"foo": "bar"},
+            params=tuple(query_params),
         )
         assert r.json()["foo"] == "bar"
+        assert [tuple(param) for param in r.json()["query_params"]] == query_params
 
         # 测试客户端请求体转发正常
         r = await client_for_conn_to_proxy_server.post(
