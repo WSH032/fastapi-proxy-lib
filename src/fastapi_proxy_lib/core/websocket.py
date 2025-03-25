@@ -493,6 +493,8 @@ class BaseWebSocketProxy(BaseProxyModel):
         client_request_headers: "HeaderTypes" = _change_client_header(
             headers=websocket.headers, target_url=target_url
         )
+        # TODO, FIXME: do not shallow clone (i.e, `tuple(...)`) the query_params,
+        # see: <https://github.com/WSH032/fastapi-proxy-lib/pull/57#issuecomment-2750153934>
         client_request_params: "QueryParamTypes" = tuple(
             websocket.query_params.multi_items()
         )

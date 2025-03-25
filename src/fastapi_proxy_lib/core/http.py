@@ -267,6 +267,8 @@ class BaseHttpProxy(BaseProxyModel):
         proxy_request = client.build_request(
             method=request.method,
             url=target_url,
+            # TODO, FIXME: do not shallow clone (i.e, `tuple(...)`) the query_params,
+            # see: <https://github.com/WSH032/fastapi-proxy-lib/pull/57#issuecomment-2750153934>
             params=tuple(request.query_params.multi_items()),
             headers=proxy_header,
             content=request_content,  # FIXME: 一个已知问题是，流式响应头包含'transfer-encoding': 'chunked'，但有些服务器会400拒绝这个头
