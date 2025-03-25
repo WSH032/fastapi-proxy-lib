@@ -159,6 +159,37 @@ class TestReverseHttpProxy(AbstractTestProxy):
         assert "close" in proxy_resp.headers["connection"]
 
     @pytest.mark.anyio()
+    async def test_if_the_multiple_query_params_forwarding_is_correct(
+        self, tool_4_test_fixture: Tool4TestFixture
+    ) -> None:
+        """See: <https://github.com/WSH032/fastapi-proxy-lib/issues/56>."""
+        client_for_conn_to_proxy_server = (
+            tool_4_test_fixture.client_for_conn_to_proxy_server
+        )
+        proxy_server_base_url = tool_4_test_fixture.proxy_server_base_url
+
+        query_params = httpx.QueryParams(
+            [
+                ("key1", "value1"),
+                # NOTE: following two keys are same
+                ("key2", "value2"),
+                ("key2", "value3"),
+            ]
+        )
+        # We only need to send the query_params to any endpoint
+        await client_for_conn_to_proxy_server.get(
+            proxy_server_base_url + "get/echo_headers_and_params",
+            params=query_params,
+        )
+
+        target_server_recv_request = tool_4_test_fixture.get_request()
+
+        # Check is the multiple query_params are forwarded correctly
+        assert sorted(target_server_recv_request.query_params.multi_items()) == sorted(
+            query_params.multi_items()
+        )
+
+    @pytest.mark.anyio()
     async def test_if_the_proxy_forwarding_is_correct(
         self, tool_4_test_fixture: Tool4TestFixture
     ) -> None:

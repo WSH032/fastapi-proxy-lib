@@ -175,6 +175,31 @@ class TestReverseWsProxy(AbstractTestProxy):
             await ws.send_bytes(b"foo")
             assert await ws.receive_bytes() == b"foo"
 
+        ########## Test multiple query params ##########
+        # see: <https://github.com/WSH032/fastapi-proxy-lib/issues/56>
+
+        query_params = httpx.QueryParams(
+            [
+                ("key1", "value1"),
+                # NOTE: following two keys are same
+                ("key2", "value2"),
+                ("key2", "value3"),
+            ]
+        )
+        # We only need to send the query_params to any endpoint
+        async with aconnect_ws(
+            proxy_server_base_url + "just_close_with_1001",
+            client_for_conn_to_proxy_server,
+            params=query_params,
+        ):
+            pass
+
+        target_starlette_ws = get_request()
+        # Check is the multiple query_params are forwarded correctly
+        assert sorted(target_starlette_ws.query_params.multi_items()) == sorted(
+            query_params.multi_items()
+        )
+
         ########## 测试子协议 ##########
 
         async with aconnect_ws(
