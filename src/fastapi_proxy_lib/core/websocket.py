@@ -490,12 +490,12 @@ class BaseWebSocketProxy(BaseProxyModel):
 
         # httpx.stream()
         # refer to: https://www.python-httpx.org/api/#helper-functions
-        client_request_headers: "HeaderTypes" = _change_client_header(
+        client_request_headers: HeaderTypes = _change_client_header(
             headers=websocket.headers, target_url=target_url
         )
         # TODO, FIXME: do not shallow clone (i.e, `tuple(...)`) the query_params,
         # see: <https://github.com/WSH032/fastapi-proxy-lib/pull/57#issuecomment-2750153934>
-        client_request_params: "QueryParamTypes" = tuple(
+        client_request_params: QueryParamTypes = tuple(
             websocket.query_params.multi_items()
         )
 

@@ -29,18 +29,18 @@ from starlette.types import Scope
 from typing_extensions import deprecated, overload
 
 __all__ = (
-    "check_base_url",
-    "return_err_msg_response",
-    "check_http_version",
     "BaseURLError",
     "ErrMsg",
     "ErrRseponseJson",
     "ProxyFilterProto",
+    "_RejectedProxyRequestError",
+    "check_base_url",
+    "check_http_version",
     "default_proxy_filter",
-    "warn_for_none_filter",
     "lru_get_url",
     "reset_lru_get_url",
-    "_RejectedProxyRequestError",
+    "return_err_msg_response",
+    "warn_for_none_filter",
 )
 
 _logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ class ErrMsg(TypedDict):
 class ErrRseponseJson(TypedDict):
     """A json-like dict for return by `JSONResponse`.
 
-    Somethin like:
+    Something like:
     ```json
     {
         "detail": {
