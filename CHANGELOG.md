@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- [#57](https://github.com/WSH032/fastapi-proxy-lib/pull/57) - fix: error in handling multiple query parameters (#56). Thanks [@yhl-cs](https://github.com/yhl-cs)!
+
+    Now `fastapi-proxy-lib` can handle multiple query parameters (e.g. `foo?a=1&a=2`) correctly. Previously, it would only keep the last one (e.g. `foo?a=2`).
+
 ## [0.2.0] - 2025-01-15
 
 ### Added
