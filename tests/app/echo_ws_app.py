@@ -53,26 +53,6 @@ def get_app() -> AppDataclass4Test:  # noqa: C901, PLR0915
             except WebSocketDisconnect:
                 break
 
-    @app.websocket("/echo_query_params")
-    async def echo_query_params(websocket: WebSocket):
-        """Websocket endpoint for echo query_params.
-
-        Sends:
-            ```py
-            {
-                "query_params": websocket.query_params.multi_items(),
-            }
-            ```
-        """
-        nonlocal test_app_dataclass
-        test_app_dataclass.request_dict["request"] = websocket
-
-        await websocket.accept()
-        msg = {
-            "query_params": websocket.query_params.multi_items(),
-        }
-        await websocket.send_json(msg)
-
     @app.websocket("/accept_foo_subprotocol")
     async def accept_foo_subprotocol(websocket: WebSocket):
         """When client send subprotocols request, if subprotocols contain "foo", will accept it."""
