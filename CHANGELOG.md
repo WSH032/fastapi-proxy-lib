@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-03-25
+
 ### Fixed
 
 - [#57](https://github.com/WSH032/fastapi-proxy-lib/pull/57) - fix: error in handling multiple query parameters (#56). Thanks [@yhl-cs](https://github.com/yhl-cs)!
@@ -72,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     **This version has security vulnerabilities, please stop using it.**
 
 [unreleased]: https://github.com/WSH032/fastapi-proxy-lib/tree/HEAD
+[0.3.0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.3.0
 [0.2.0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.2.0
 [0.1.0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.1.0
 [0.0.1b0]: https://github.com/WSH032/fastapi-proxy-lib/releases/tag/v0.0.1b0
