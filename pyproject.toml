@@ -107,7 +107,7 @@ dependencies = [
 # xml for codecov, html for local review
 test = "pytest tests/ --cov --cov-report=xml --cov-report=html"
 # ruff must before black
-lint = ["- ruff --fix .", "- black .", "- pyright .", "- codespell . -i 3 -w"]
+lint = ["- ruff check --fix .", "- black .", "- pyright .", "- codespell . -i 3 -w"]
 lint-check = [
     "ruff check .",
     "black --check .",

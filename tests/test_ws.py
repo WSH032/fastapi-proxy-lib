@@ -61,7 +61,9 @@ def _subprocess_run_echo_ws_uvicorn_server(queue: "Queue[str]", **kwargs: Any):
         url = str(target_ws_server.contx_socket_url)
         queue.put(url)
         queue.close()
-        while True:  # run forever
+
+        # run forever
+        while True:  # noqa: ASYNC110  # false-positive
             await asyncio.sleep(0.1)
 
     asyncio.run(run())
@@ -98,7 +100,9 @@ def _subprocess_run_httpx_ws(
         _ = await _exit_stack.enter_async_context(_ws_session)
         queue.put("done")
         queue.close()
-        while True:  # run forever
+
+        # run forever
+        while True:  # noqa: ASYNC110  # false-positive
             await asyncio.sleep(0.1)
 
     asyncio.run(run())
@@ -253,7 +257,9 @@ class TestReverseWsProxy(AbstractTestProxy):
         aconnect_ws_subprocess.start()
 
         # 避免从队列中get导致的异步阻塞
-        while aconnect_ws_subprocess_queue.empty():
+        while (  # noqa: ASYNC110  # `multiprocessing.Queue` is not awaitable
+            aconnect_ws_subprocess_queue.empty()
+        ):
             await asyncio.sleep(0.1)
         _ = aconnect_ws_subprocess_queue.get()  # 获取到了即代表连接建立成功
 
@@ -294,7 +300,9 @@ class TestReverseWsProxy(AbstractTestProxy):
         target_ws_server_subprocess.start()
 
         # 避免从队列中get导致的异步阻塞
-        while subprocess_queue.empty():
+        while (  # noqa: ASYNC110  # `multiprocessing.Queue` is not awaitable
+            subprocess_queue.empty()
+        ):
             await asyncio.sleep(0.1)
         target_server_base_url = subprocess_queue.get()
 

@@ -100,7 +100,7 @@ class ErrMsg(TypedDict):
 class ErrRseponseJson(TypedDict):
     """A json-like dict for return by `JSONResponse`.
 
-    Somethin like:
+    Something like:
     ```json
     {
         "detail": {
