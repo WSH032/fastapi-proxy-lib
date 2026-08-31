@@ -9,11 +9,9 @@ from importlib.util import find_spec
 from textwrap import dedent
 
 if find_spec("fastapi") is None:  # pragma: no cover  # 无法测试
-    msg: str = dedent(
-        """\
+    msg: str = dedent("""\
         `fastapi` is not installed.
         `fastapi_proxy_lib.fastapi` module requires installing `fastapi` first:
             pip install fastapi-proxy-lib[standard]
-        """
-    )
+        """)
     raise RuntimeError(msg)
