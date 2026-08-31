@@ -1,4 +1,4 @@
-# ruff: noqa: ANN201, ANN001
+# ruff: noqa: ANN201
 
 # pyright: reportMissingParameterType=false
 # 返回值标注太麻烦，让pyright自己推断
