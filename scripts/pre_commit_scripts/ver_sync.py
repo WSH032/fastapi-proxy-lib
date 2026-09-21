@@ -2,7 +2,6 @@
 
 """Maintain lint tools version consistency between `.pre-commit-config.yaml` and `pyproject.toml`."""
 
-
 # https://packaging.pypa.io/en/stable/requirements.html
 # https://yaml.readthedocs.io/en/latest/example/
 # https://tomlkit.readthedocs.io/en/latest/quickstart/
