@@ -204,39 +204,31 @@ def check_base_url(base_url: Union[httpx.URL, str], /) -> httpx.URL:
     )
 
     if not base_url.scheme or not base_url.netloc:
-        raise BaseURLError(
-            dedent(
-                f"""\
+        raise BaseURLError(dedent(f"""\
                 `base_url` must contain scheme and netloc,
                 e.g. {example_url}
                 got: {base_url}\
-                """
-            )
-        )
+                """))
 
     # NOTE: 尽量用 URL.copy_with() 来修改URL，而不是 URL.join()，因为后者性能较差
 
     if base_url.query or base_url.fragment:
         base_url = base_url.copy_with(query=None, fragment=None)
         warnings.warn(
-            dedent(
-                f"""\
+            dedent(f"""\
                 `base_url` should not contain `query` or `fragment`, which will be ignored.
                 The `base_url` will be treated as: {base_url}\
-                """
-            ),
+                """),
             stacklevel=2,
         )
     # 我们在这里强制要求 base_url 以"/"结尾是有原因的:
     # 因为 RouterHelper 生成的路由是以"/"结尾的，在反向代理时
     # "/" 之后后路径参数将会被拼接到这个 base_url 后面
     if not str(base_url).endswith("/"):
-        msg = dedent(
-            f"""\
+        msg = dedent(f"""\
             `base_url` must ends with "/", may be you mean:
             {base_url}/\
-            """
-        )
+            """)
         raise BaseURLError(msg)
 
     return base_url
@@ -424,8 +416,7 @@ def warn_for_none_filter(
     Else will just return the original argument `proxy_filter`.
     """
     if proxy_filter is None:
-        msg = dedent(
-            """\
+        msg = dedent("""\
             The `proxy_filter` is None, which means no filter will be used.
             It is not recommended, because it may cause security issues.
 
@@ -433,8 +424,7 @@ def warn_for_none_filter(
              - if the host of url is ip address, and is not global ip address.
 
             More info: https://wsh032.github.io/fastapi-proxy-lib/Usage/Security/
-            """
-        )
+            """)
         warnings.warn(msg, stacklevel=3)
         return default_proxy_filter
     else:
